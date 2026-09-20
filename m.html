@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Education Launcher</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1e1e1e;
+        }
+        .launcher-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-image: url('image_raoy2A.png'); /* Replace with your local image file name/path if different */
+            background-size: 100% 100%; /* Forces the image to stretch and stretch completely fill the canvas dimensions */
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        .play-overlay-link {
+            position: absolute;
+            /* Percentages based on the full dimensions of the image canvas */
+            bottom: 1.5%;
+            left: 46.8%;
+            width: 24.3%;
+            height: 10%;
+            cursor: pointer;
+            text-decoration: none;
+            background-color: rgba(255, 255, 255, 0); /* Keeps the clickable area invisible */
+        }
+        .play-overlay-link:hover {
+            background-color: rgba(255, 255, 255, 0.05); /* Slight highlight on hover */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="launcher-container">
+        <!-- Invisible link layered perfectly over the PLAY button graphic -->
+        <a href="minecraftedu://open" class="play-overlay-link" title="Launch Minecraft Education"></a>
+    </div>
+
+</body>
+</html>
