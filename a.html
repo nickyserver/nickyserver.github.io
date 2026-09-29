@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android Quick Share Web</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Material Symbols Outlined Font -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <!-- Google Sans / Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        md3: {
+                            primary: '#A8C7FA',
+                            onPrimary: '#00315B',
+                            primaryContainer: '#004A77',
+                            onPrimaryContainer: '#C2E7FF',
+                            surface: '#111318',
+                            surfaceVariant: '#282A2F',
+                            onSurface: '#E2E2E9',
+                            onSurfaceVariant: '#C4C6D0',
+                            outline: '#8E9099',
+                            accent: '#7FCFFF',
+                            success: '#6DD58C',
+                            error: '#FFB4AB'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'radar-ping': 'radarPing 2.5s cubic-bezier(0, 0, 0.2, 1) infinite',
+                        'spin-slow': 'spin 12s linear infinite',
+                    },
+                    keyframes: {
+                        radarPing: {
+                            '0%': { transform: 'scale(0.8)', opacity: '0.8' },
+                            '100%': { transform: 'scale(2.2)', opacity: '0' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .radar-ring {
+            border: 1.5px solid rgba(168, 199, 250, 0.25);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .glass-panel {
+            background: rgba(30, 32, 38, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .ripple-btn {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .ripple-btn:active {
+            transform: scale(0.97);
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 999px;
+        }
+    </style>
+</head>
+<body class="bg-[#0e0f12] text-md3-onSurface min-h-screen flex flex-col justify-between overflow-x-hidden selection:bg-md3-primaryContainer selection:text-md3-onPrimaryContainer">
+
+    <!-- Top Navigation Bar -->
+    <header class="w-full px-4 sm:px-8 py-4 flex items-center justify-between border-b border-gray-800/60 glass-panel sticky top-0 z-30">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <span class="material-symbols-outlined text-white text-2xl">share</span>
+            </div>
+            <div>
+                <h1 class="text-lg font-semibold tracking-wide text-white flex items-center gap-2">
+                    Quick Share
+                    <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">Android Web</span>
+                </h1>
+                <p class="text-xs text-md3-onSurfaceVariant flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Ready to send & receive
+                </p>
+            </div>
+        </div>
+
+        <!-- Controls Header Right -->
+        <div class="flex items-center space-x-2 sm:space-x-3">
+            <!-- Visibility Dropdown -->
+            <button id="visibilityBtn" onclick="toggleVisibilityModal()" class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700/50 text-xs font-medium transition-colors">
+                <span class="material-symbols-outlined text-base text-md3-primary" id="visibilityIcon">visibility</span>
+                <span id="visibilityText" class="hidden sm:inline">Everyone</span>
+            </button>
+
+            <!-- Device Name Switcher -->
+            <button onclick="openDeviceNameModal()" class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700/50 text-xs font-medium transition-colors">
+                <span class="material-symbols-outlined text-base text-cyan-400" id="deviceTypeIcon">smartphone</span>
+                <span id="currentDeviceNameDisplay" class="max-w-[100px] truncate">Pixel 8 Pro</span>
+            </button>
+
+            <!-- Simulated Mode Toggle -->
+            <button id="simModeToggle" onclick="toggleSimulatedMode()" title="Toggle simulated devices for easy 1-device testing" class="flex items-center space-x-1 px-3 py-1.5 rounded-full bg-purple-900/40 hover:bg-purple-800/50 text-purple-200 border border-purple-500/30 text-xs font-medium transition-colors">
+                <span class="material-symbols-outlined text-base">smart_toy</span>
+                <span class="hidden md:inline">Demo Devices</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Interactive Area -->
+    <main class="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 md:p-8 flex flex-col lg:flex-row gap-6 items-center justify-center relative">
+        
+        <!-- Left Side: File Selector & Radar View -->
+        <section class="w-full lg:w-1/2 flex flex-col items-center justify-center min-h-[420px] relative rounded-3xl glass-panel p-6 overflow-hidden">
+            
+            <!-- Radar Background Animations -->
+            <div id="radarContainer" class="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none opacity-40">
+                <div class="radar-ring w-[140px] h-[140px]"></div>
+                <div class="radar-ring w-[260px] h-[260px]"></div>
+                <div class="radar-ring w-[380px] h-[380px]"></div>
+                <div class="radar-ring w-[500px] h-[500px]"></div>
+                <!-- Animated Ping Ring -->
+                <div class="w-[200px] h-[200px] rounded-full border-2 border-md3-primary absolute animate-radar-ping"></div>
+            </div>
+
+            <!-- Central Radar Hub / File Drop Zone -->
+            <div id="dropZone" class="relative z-10 flex flex-col items-center text-center p-6 rounded-2xl transition-all duration-300 w-full max-w-sm cursor-pointer hover:bg-white/5 border-2 border-dashed border-gray-700 hover:border-md3-primary group">
+                <input type="file" id="fileInput" class="hidden" multiple onchange="handleFileSelect(event)">
+                
+                <div id="filePreviewContainer" class="hidden flex-col items-center mb-3">
+                    <div id="fileTypeIcon" class="w-16 h-16 rounded-2xl bg-md3-primaryContainer text-md3-onPrimaryContainer flex items-center justify-center text-3xl shadow-inner mb-2">
+                        <span class="material-symbols-outlined text-4xl">description</span>
+                    </div>
+                    <span id="selectedFileName" class="text-sm font-semibold text-white max-w-[220px] truncate">document.pdf</span>
+                    <span id="selectedFileSize" class="text-xs text-md3-onSurfaceVariant">2.4 MB</span>
+                    <button onclick="clearSelectedFile(event)" class="mt-2 text-xs text-red-400 hover:underline flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">cancel</span> Remove file
+                    </button>
+                </div>
+
+                <div id="dropPrompt" class="flex flex-col items-center">
+                    <div class="w-16 h-16 rounded-full bg-md3-primary/10 text-md3-primary flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                        <span class="material-symbols-outlined text-3xl">upload_file</span>
+                    </div>
+                    <h3 class="text-base font-semibold text-white mb-1">Select or drag files here</h3>
+                    <p class="text-xs text-md3-onSurfaceVariant mb-4">Photos, videos, documents, or text</p>
+                    <span class="px-4 py-2 rounded-full bg-md3-primary text-md3-onPrimary font-medium text-xs shadow-md group-hover:bg-blue-300 transition-colors">
+                        Browse Files
+                    </span>
+                </div>
+            </div>
+
+            <div class="relative z-10 mt-6 text-center">
+                <p class="text-xs text-md3-onSurfaceVariant font-medium flex items-center justify-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
+                    Scanning for nearby devices...
+                </p>
+            </div>
+        </section>
+
+        <!-- Right Side: Discovered Nearby Devices -->
+        <section class="w-full lg:w-1/2 flex flex-col justify-between min-h-[420px] rounded-3xl glass-panel p-6">
+            <div>
+                <div class="flex items-center justify-between mb-4 pb-3 border-b border-gray-800">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-md3-primary">devices</span>
+                        <h2 class="text-base font-semibold text-white">Nearby Devices</h2>
+                    </div>
+                    <span id="deviceCountBadge" class="text-xs px-2.5 py-0.5 rounded-full bg-gray-800 text-gray-300 font-mono">0 found</span>
+                </div>
+
+                <!-- Empty State -->
+                <div id="emptyDevicesState" class="flex flex-col items-center justify-center py-12 text-center text-gray-500">
+                    <span class="material-symbols-outlined text-4xl mb-2 text-gray-600">wifi_find</span>
+                    <p class="text-sm font-medium">Looking for devices nearby...</p>
+                    <p class="text-xs text-gray-600 mt-1 max-w-xs">Open this webpage in another tab or device to see real-time peer discovery.</p>
+                </div>
+
+                <!-- Devices List Grid -->
+                <div id="devicesList" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-1">
+                    <!-- Dynamic devices populated here -->
+                </div>
+            </div>
+
+            <!-- Footer instructions -->
+            <div class="mt-4 pt-3 border-t border-gray-800/80 flex items-center justify-between text-xs text-md3-onSurfaceVariant">
+                <span class="flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm text-emerald-400">lock</span>
+                    End-to-end encrypted
+                </span>
+                <span id="networkStatus" class="text-gray-400">WebRTC Data Channel</span>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Receiver Incoming Share Modal (Bottom Sheet / Popup) -->
+    <div id="incomingModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 opacity-0 pointer-events-none transition-all duration-300">
+        <div class="w-full sm:max-w-md bg-[#1e2026] border border-gray-700/80 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl transform translate-y-full sm:translate-y-0 transition-transform duration-300" id="incomingModalCard">
+            
+            <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4 sm:hidden"></div>
+            
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-12 h-12 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center text-2xl">
+                    <span class="material-symbols-outlined text-3xl" id="incomingDeviceIcon">smartphone</span>
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-white" id="incomingSenderName">Google Pixel 8</h3>
+                    <p class="text-xs text-md3-onSurfaceVariant">Wants to share a file with you</p>
+                </div>
+            </div>
+
+            <!-- File details card -->
+            <div class="bg-gray-800/80 rounded-2xl p-4 mb-4 border border-gray-700/60 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-md3-primaryContainer text-md3-onPrimaryContainer flex items-center justify-center">
+                    <span class="material-symbols-outlined" id="incomingFileTypeIcon">folder_zip</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-semibold text-white truncate" id="incomingFileName">vacation_photos.zip</p>
+                    <p class="text-xs text-gray-400" id="incomingFileSize">14.2 MB</p>
+                </div>
+            </div>
+
+            <!-- Security Pin Matching -->
+            <div class="bg-blue-950/40 border border-blue-800/50 rounded-2xl p-3 mb-6 text-center">
+                <p class="text-[11px] uppercase font-semibold text-blue-300 tracking-wider mb-1">PIN Verification Code</p>
+                <div class="text-2xl font-mono font-bold tracking-widest text-white" id="incomingPinCode">8492</div>
+                <p class="text-[11px] text-gray-400 mt-0.5">Ensure this code matches on the sender's screen</p>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="declineIncomingShare()" class="py-3 px-4 rounded-2xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium text-sm transition-colors border border-gray-700">
+                    Decline
+                </button>
+                <button onclick="acceptIncomingShare()" class="py-3 px-4 rounded-2xl bg-md3-primary hover:bg-blue-300 text-md3-onPrimary font-semibold text-sm transition-colors shadow-lg shadow-blue-500/20">
+                    Accept & Download
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Transfer Progress Modal -->
+    <div id="transferModal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-all duration-300">
+        <div class="w-full max-w-sm bg-[#1e2026] border border-gray-700 rounded-3xl p-6 shadow-2xl text-center">
+            
+            <div class="relative w-28 h-28 mx-auto mb-4 flex items-center justify-center">
+                <!-- Circular progress SVG -->
+                <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                    <path class="text-gray-800" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <path id="transferProgressCircle" class="text-md3-primary transition-all duration-150 ease-out" stroke-dasharray="0, 100" stroke-width="3" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                </svg>
+                <div class="absolute flex flex-col items-center justify-center">
+                    <span id="transferPercentText" class="text-xl font-bold text-white font-mono">0%</span>
+                    <span id="transferSpeedText" class="text-[10px] text-gray-400">0 KB/s</span>
+                </div>
+            </div>
+
+            <h3 id="transferStatusTitle" class="text-base font-bold text-white mb-1">Sending file...</h3>
+            <p id="transferPeerName" class="text-xs text-md3-onSurfaceVariant mb-4">To Samsung Galaxy Tab S9</p>
+
+            <div class="bg-gray-800/60 rounded-xl p-3 mb-5 text-left border border-gray-700/50">
+                <p id="transferFileName" class="text-xs font-semibold text-white truncate">image_2026_09_29.png</p>
+                <p id="transferSizeText" class="text-[11px] text-gray-400 mt-0.5">0 KB of 0 KB transferred</p>
+            </div>
+
+            <button id="cancelTransferBtn" onclick="cancelActiveTransfer()" class="w-full py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-red-400 text-xs font-semibold transition-colors border border-gray-700">
+                Cancel Transfer
+            </button>
+            <button id="closeTransferBtn" onclick="closeTransferModal()" class="hidden w-full py-2.5 rounded-xl bg-md3-primary hover:bg-blue-300 text-md3-onPrimary text-xs font-bold transition-colors">
+                Done
+            </button>
+        </div>
+    </div>
+
+    <!-- Device Name Modal -->
+    <div id="deviceNameModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-all duration-200">
+        <div class="w-full max-w-sm bg-[#1e2026] border border-gray-700 rounded-3xl p-6 shadow-2xl">
+            <h3 class="text-base font-bold text-white mb-2">Device Quick Share Name</h3>
+            <p class="text-xs text-gray-400 mb-4">This name will be shown to nearby devices when discovering you.</p>
+
+            <div class="space-y-3 mb-5">
+                <div>
+                    <label class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">Device Name</label>
+                    <input type="text" id="deviceNameInput" value="Pixel 8 Pro" class="w-full px-3 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-md3-primary">
+                </div>
+                <div>
+                    <label class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">Device Type</label>
+                    <select id="deviceTypeSelect" class="w-full px-3 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-md3-primary">
+                        <option value="smartphone">Phone (Android)</option>
+                        <option value="tablet">Tablet</option>
+                        <option value="laptop">Laptop / PC</option>
+                        <option value="desktop">Desktop</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <button onclick="closeDeviceNameModal()" class="px-4 py-2 rounded-xl text-xs font-medium text-gray-400 hover:text-white">Cancel</button>
+                <button onclick="saveDeviceSettings()" class="px-4 py-2 rounded-xl bg-md3-primary text-md3-onPrimary text-xs font-semibold">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Visibility Options Modal -->
+    <div id="visibilityModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-all duration-200">
+        <div class="w-full max-w-sm bg-[#1e2026] border border-gray-700 rounded-3xl p-6 shadow-2xl">
+            <h3 class="text-base font-bold text-white mb-1">Device Visibility</h3>
+            <p class="text-xs text-gray-400 mb-4">Who can discover your device when Quick Share is open.</p>
+
+            <div class="space-y-2 mb-6">
+                <label onclick="setVisibility('Everyone')" class="flex items-center justify-between p-3 rounded-2xl bg-gray-800/80 hover:bg-gray-800 border border-gray-700/60 cursor-pointer">
+                    <div class="flex items-center gap-3">
+                        <span class="material-symbols-outlined text-md3-primary">public</span>
+                        <div>
+                            <p class="text-sm font-semibold text-white">Everyone</p>
+                            <p class="text-[11px] text-gray-400">Anyone nearby can share with you</p>
+                        </div>
+                    </div>
+                    <input type="radio" name="visibility" value="Everyone" checked class="accent-blue-400">
+                </label>
+
+                <label onclick="setVisibility('Contacts only')" class="flex items-center justify-between p-3 rounded-2xl bg-gray-800/80 hover:bg-gray-800 border border-gray-700/60 cursor-pointer">
+                    <div class="flex items-center gap-3">
+                        <span class="material-symbols-outlined text-cyan-400">contacts</span>
+                        <div>
+                            <p class="text-sm font-semibold text-white">Contacts only</p>
+                            <p class="text-[11px] text-gray-400">Only saved contacts can discover you</p>
+                        </div>
+                    </div>
+                    <input type="radio" name="visibility" value="Contacts only" class="accent-blue-400">
+                </label>
+
+                <label onclick="setVisibility('Hidden')" class="flex items-center justify-between p-3 rounded-2xl bg-gray-800/80 hover:bg-gray-800 border border-gray-700/60 cursor-pointer">
+                    <div class="flex items-center gap-3">
+                        <span class="material-symbols-outlined text-gray-400">visibility_off</span>
+                        <div>
+                            <p class="text-sm font-semibold text-white">Hidden</p>
+                            <p class="text-[11px] text-gray-400">No one can see your device</p>
+                        </div>
+                    </div>
+                    <input type="radio" name="visibility" value="Hidden" class="accent-blue-400">
+                </label>
+            </div>
+
+            <div class="flex justify-end">
+                <button onclick="closeVisibilityModal()" class="px-5 py-2 rounded-xl bg-md3-primary text-md3-onPrimary text-xs font-semibold">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast Bar -->
+    <div id="toastContainer" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center space-y-2 pointer-events-none"></div>
+
+    <!-- Footer Status -->
+    <footer class="w-full py-3 px-6 text-center text-xs text-gray-600 border-t border-gray-800/40">
+        Google Quick Share Web Protocol Simulator &bull; WebRTC DataChannel Engine
+    </footer>
+
+    <script>
+        /* Global Application State */
+        const state = {
+            deviceId: 'dev_' + Math.random().toString(36).substring(2, 9),
+            deviceName: 'Pixel ' + Math.floor(100 + Math.random() * 900),
+            deviceType: 'smartphone',
+            visibility: 'Everyone',
+            simulatedMode: false,
+            discoveredPeers: new Map(), // peerId -> peerInfo
+            selectedFiles: [],
+            pendingTransfer: null,
+            activeTransfer: null,
+            channel: null,
+            rtcConnections: new Map() // peerId -> RTCPeerConnection
+        };
+
+        /* Sound Effect Synthesizer (Web Audio API) */
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(type) {
+            try {
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+
+                if (type === 'ping') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(587.33, now); // D5
+                    osc.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                } else if (type === 'success') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, now); // C5
+                    osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+                    osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+                    osc.start(now);
+                    osc.stop(now + 0.5);
+                } else if (type === 'cancel') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.linearRampToValueAtTime(150, now + 0.2);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                }
+            } catch (e) {
+                console.warn('Audio play error:', e);
+            }
+        }
+
+        /* Initialize BroadcastChannel for local tab-to-tab mesh discovery */
+        function initBroadcastChannel() {
+            try {
+                state.channel = new BroadcastChannel('android_quick_share_mesh');
+                
+                state.channel.onmessage = (event) => {
+                    const msg = event.data;
+                    if (!msg || msg.senderId === state.deviceId) return;
+
+                    switch (msg.type) {
+                        case 'PRESENCE_ANNOUNCE':
+                            handlePresenceAnnounce(msg);
+                            break;
+                        case 'PRESENCE_LEAVE':
+                            removeDiscoveredPeer(msg.senderId);
+                            break;
+                        case 'SHARE_OFFER':
+                            handleIncomingShareOffer(msg);
+                            break;
+                        case 'SHARE_RESPONSE':
+                            handleShareResponse(msg);
+                            break;
+                        case 'TRANSFER_CHUNK':
+                            handleTransferChunk(msg);
+                            break;
+                        case 'TRANSFER_COMPLETE':
+                            handleTransferComplete(msg);
+                            break;
+                        case 'TRANSFER_CANCEL':
+                            handleTransferCancel(msg);
+                            break;
+                    }
+                };
+
+                // Announce presence immediately
+                broadcastPresence();
+
+                // Periodically heartbeat presence
+                setInterval(broadcastPresence, 3000);
+
+            } catch (e) {
+                console.error("BroadcastChannel initialization error:", e);
+            }
+        }
+
+        function broadcastPresence() {
+            if (!state.channel || state.visibility === 'Hidden') return;
+            state.channel.postMessage({
+                type: 'PRESENCE_ANNOUNCE',
+                senderId: state.deviceId,
+                name: state.deviceName,
+                deviceType: state.deviceType,
+                visibility: state.visibility,
+                timestamp: Date.now()
+            });
+        }
+
+        function handlePresenceAnnounce(msg) {
+            if (msg.visibility === 'Hidden') {
+                removeDiscoveredPeer(msg.senderId);
+                return;
+            }
+
+            const existing = state.discoveredPeers.get(msg.senderId);
+            state.discoveredPeers.set(msg.senderId, {
+                id: msg.senderId,
+                name: msg.name,
+                deviceType: msg.deviceType,
+                lastSeen: Date.now(),
+                isSimulated: false
+            });
+
+            if (!existing) {
+                playSound('ping');
+                showToast(`Nearby device found: ${msg.name}`);
+            }
+
+            renderDevicesList();
+        }
+
+        function removeDiscoveredPeer(peerId) {
+            if (state.discoveredPeers.has(peerId)) {
+                state.discoveredPeers.delete(peerId);
+                renderDevicesList();
+            }
+        }
+
+        // Clean stale peers
+        setInterval(() => {
+            const now = Date.now();
+            let changed = false;
+            for (const [id, peer] of state.discoveredPeers.entries()) {
+                if (!peer.isSimulated && (now - peer.lastSeen > 8000)) {
+                    state.discoveredPeers.delete(id);
+                    changed = true;
+                }
+            }
+            if (changed) renderDevicesList();
+        }, 4000);
+
+        /* Simulated Devices Mode for Single Device Testing */
+        const SIMULATED_PEERS = [
+            { id: 'sim_s24', name: 'Galaxy S24 Ultra', deviceType: 'smartphone', isSimulated: true },
+            { id: 'sim_tab_s9', name: 'Galaxy Tab S9', deviceType: 'tablet', isSimulated: true },
+            { id: 'sim_book4', name: 'Galaxy Book4 Pro', deviceType: 'laptop', isSimulated: true },
+            { id: 'sim_pixel_fold', name: 'Pixel Fold', deviceType: 'smartphone', isSimulated: true }
+        ];
+
+        function toggleSimulatedMode() {
+            state.simulatedMode = !state.simulatedMode;
+            const btn = document.getElementById('simModeToggle');
+
+            if (state.simulatedMode) {
+                btn.classList.add('bg-purple-600', 'text-white');
+                SIMULATED_PEERS.forEach(peer => {
+                    state.discoveredPeers.set(peer.id, { ...peer, lastSeen: Date.now() });
+                });
+                showToast('Demo simulated devices activated');
+                playSound('ping');
+            } else {
+                btn.classList.remove('bg-purple-600', 'text-white');
+                SIMULATED_PEERS.forEach(peer => {
+                    state.discoveredPeers.delete(peer.id);
+                });
+                showToast('Demo simulated devices removed');
+            }
+            renderDevicesList();
+        }
+
+        function getDeviceIcon(type) {
+            switch(type) {
+                case 'tablet': return 'tablet_android';
+                case 'laptop': return 'laptop_chromebook';
+                case 'desktop': return 'desktop_windows';
+                default: return 'smartphone';
+            }
+        }
+
+        function renderDevicesList() {
+            const container = document.getElementById('devicesList');
+            const emptyState = document.getElementById('emptyDevicesState');
+            const badge = document.getElementById('deviceCountBadge');
+
+            const peers = Array.from(state.discoveredPeers.values());
+            badge.innerText = `${peers.length} found`;
+
+            if (peers.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            container.innerHTML = peers.map(peer => `
+                <div onclick="initiateFileShare('${peer.id}')" class="p-3 rounded-2xl bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700/60 cursor-pointer transition-all duration-200 flex items-center justify-between group hover:border-md3-primary">
+                    <div class="flex items-center space-x-3 min-w-0">
+                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 group-hover:bg-blue-500/20 text-md3-primary flex items-center justify-center transition-colors">
+                            <span class="material-symbols-outlined text-xl">${getDeviceIcon(peer.deviceType)}</span>
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="text-xs font-semibold text-white truncate">${escapeHtml(peer.name)}</h4>
+                            <p class="text-[10px] text-gray-400 flex items-center gap-1">
+                                ${peer.isSimulated ? '<span class="text-purple-400 font-medium">[Demo Device]</span>' : '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Online'}
+                            </p>
+                        </div>
+                    </div>
+                    <span class="material-symbols-outlined text-gray-500 group-hover:text-md3-primary group-hover:translate-x-0.5 transition-all text-lg">
+                        send
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        function setupDragAndDrop() {
+            const zone = document.getElementById('dropZone');
+            const input = document.getElementById('fileInput');
+
+            zone.addEventListener('click', () => input.click());
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                zone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    zone.classList.add('border-md3-primary', 'bg-blue-500/10');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                zone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    zone.classList.remove('border-md3-primary', 'bg-blue-500/10');
+                }, false);
+            });
+
+            zone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                if (dt.files && dt.files.length > 0) {
+                    processFiles(dt.files);
+                }
+            });
+        }
+
+        function handleFileSelect(event) {
+            if (event.target.files && event.target.files.length > 0) {
+                processFiles(event.target.files);
+            }
+        }
+
+        function processFiles(fileList) {
+            state.selectedFiles = Array.from(fileList);
+            const file = state.selectedFiles[0];
+
+            document.getElementById('dropPrompt').classList.add('hidden');
+            const preview = document.getElementById('filePreviewContainer');
+            preview.classList.remove('hidden');
+            preview.classList.add('flex');
+
+            document.getElementById('selectedFileName').innerText = file.name;
+            document.getElementById('selectedFileSize').innerText = formatBytes(file.size);
+
+            showToast(`File attached: ${file.name}`);
+        }
+
+        function clearSelectedFile(e) {
+            if (e) e.stopPropagation();
+            state.selectedFiles = [];
+            document.getElementById('fileInput').value = '';
+            document.getElementById('filePreviewContainer').classList.add('hidden');
+            document.getElementById('filePreviewContainer').classList.remove('flex');
+            document.getElementById('dropPrompt').classList.remove('hidden');
+        }
+
+        function generatePin() {
+            return Math.floor(1000 + Math.random() * 9000).toString();
+        }
+
+        function initiateFileShare(targetPeerId) {
+            if (state.selectedFiles.length === 0) {
+                showToast('Please select a file to share first!');
+                return;
+            }
+
+            const file = state.selectedFiles[0];
+            const targetPeer = state.discoveredPeers.get(targetPeerId);
+
+            if (!targetPeer) {
+                showToast('Target device is no longer available');
+                return;
+            }
+
+            const pinCode = generatePin();
+            const transferId = 'tx_' + Date.now();
+
+            state.activeTransfer = {
+                id: transferId,
+                role: 'sender',
+                peerId: targetPeerId,
+                peerName: targetPeer.name,
+                file: file,
+                pinCode: pinCode,
+                bytesTransferred: 0,
+                totalBytes: file.size,
+                startTime: null
+            };
+
+            // Open Progress Modal
+            openTransferModal(`Requesting Quick Share with ${targetPeer.name}...`, targetPeer.name, file.name, file.size);
+
+            if (targetPeer.isSimulated) {
+                // Handle Simulated Device Flow with automated prompt window
+                setTimeout(() => {
+                    simulateIncomingShareRequest(targetPeer, file, pinCode, transferId);
+                }, 800);
+            } else {
+                // Send Real Share Offer over BroadcastChannel
+                state.channel.postMessage({
+                    type: 'SHARE_OFFER',
+                    transferId: transferId,
+                    senderId: state.deviceId,
+                    senderName: state.deviceName,
+                    senderDeviceType: state.deviceType,
+                    targetPeerId: targetPeerId,
+                    fileName: file.name,
+                    fileSize: file.size,
+                    fileType: file.type,
+                    pinCode: pinCode
+                });
+            }
+        }
+
+        function handleIncomingShareOffer(msg) {
+            if (msg.targetPeerId !== state.deviceId) return;
+
+            state.pendingTransfer = {
+                transferId: msg.transferId,
+                senderId: msg.senderId,
+                senderName: msg.senderName,
+                senderDeviceType: msg.senderDeviceType,
+                fileName: msg.fileName,
+                fileSize: msg.fileSize,
+                fileType: msg.fileType,
+                pinCode: msg.pinCode,
+                receivedChunks: [],
+                receivedBytes: 0
+            };
+
+            playSound('ping');
+
+            // Populate Incoming Modal
+            document.getElementById('incomingSenderName').innerText = msg.senderName;
+            document.getElementById('incomingDeviceIcon').innerText = getDeviceIcon(msg.senderDeviceType);
+            document.getElementById('incomingFileName').innerText = msg.fileName;
+            document.getElementById('incomingFileSize').innerText = formatBytes(msg.fileSize);
+            document.getElementById('incomingPinCode').innerText = msg.pinCode;
+
+            showIncomingModal();
+        }
+
+        function acceptIncomingShare() {
+            hideIncomingModal();
+            const pending = state.pendingTransfer;
+            if (!pending) return;
+
+            state.activeTransfer = {
+                id: pending.transferId,
+                role: 'receiver',
+                peerId: pending.senderId,
+                peerName: pending.senderName,
+                fileName: pending.fileName,
+                totalBytes: pending.fileSize,
+                receivedBytes: 0,
+                receivedChunks: [],
+                startTime: Date.now()
+            };
+
+            // Notify Sender of Acceptance
+            state.channel.postMessage({
+                type: 'SHARE_RESPONSE',
+                transferId: pending.transferId,
+                senderId: state.deviceId,
+                targetPeerId: pending.senderId,
+                accepted: true
+            });
+
+            openTransferModal(`Receiving file from ${pending.senderName}...`, pending.senderName, pending.fileName, pending.fileSize);
+        }
+
+        function declineIncomingShare() {
+            hideIncomingModal();
+            const pending = state.pendingTransfer;
+            if (pending) {
+                state.channel.postMessage({
+                    type: 'SHARE_RESPONSE',
+                    transferId: pending.transferId,
+                    senderId: state.deviceId,
+                    targetPeerId: pending.senderId,
+                    accepted: false
+                });
+                state.pendingTransfer = null;
+            }
+        }
+
+        function handleShareResponse(msg) {
+            if (!state.activeTransfer || state.activeTransfer.id !== msg.transferId) return;
+
+            if (msg.accepted) {
+                showToast(`${state.activeTransfer.peerName} accepted transfer!`);
+                startSendingFileChunks();
+            } else {
+                playSound('cancel');
+                showToast(`${state.activeTransfer.peerName} declined the transfer request`);
+                closeTransferModal();
+            }
+        }
+
+        async function startSendingFileChunks() {
+            const transfer = state.activeTransfer;
+            if (!transfer || !transfer.file) return;
+
+            transfer.startTime = Date.now();
+            document.getElementById('transferStatusTitle').innerText = 'Transmitting data...';
+
+            const CHUNK_SIZE = 32 * 1024; // 32KB chunks
+            const file = transfer.file;
+            let offset = 0;
+
+            while (offset < file.size) {
+                if (!state.activeTransfer || state.activeTransfer.id !== transfer.id) break; // Transfer canceled
+
+                const slice = file.slice(offset, offset + CHUNK_SIZE);
+                const arrayBuffer = await slice.arrayBuffer();
+                const base64Data = arrayBufferToBase64(arrayBuffer);
+
+                state.channel.postMessage({
+                    type: 'TRANSFER_CHUNK',
+                    transferId: transfer.id,
+                    senderId: state.deviceId,
+                    targetPeerId: transfer.peerId,
+                    chunk: base64Data,
+                    offset: offset
+                });
+
+                offset += slice.size;
+                transfer.bytesTransferred = offset;
+                updateTransferProgress(offset, file.size);
+
+                // Small async yield for UI updates & smooth progress animation
+                await new Promise(r => setTimeout(r, 15));
+            }
+
+            if (state.activeTransfer && state.activeTransfer.id === transfer.id) {
+                state.channel.postMessage({
+                    type: 'TRANSFER_COMPLETE',
+                    transferId: transfer.id,
+                    senderId: state.deviceId,
+                    targetPeerId: transfer.peerId
+                });
+
+                finishTransferSuccess('File sent successfully!');
+            }
+        }
+
+        function handleTransferChunk(msg) {
+            if (msg.targetPeerId !== state.deviceId) return;
+            const transfer = state.activeTransfer;
+            if (!transfer || transfer.id !== msg.transferId) return;
+
+            const binaryChunk = base64ToArrayBuffer(msg.chunk);
+            transfer.receivedChunks.push(binaryChunk);
+            transfer.receivedBytes += binaryChunk.byteLength;
+
+            updateTransferProgress(transfer.receivedBytes, transfer.totalBytes);
+        }
+
+        function handleTransferComplete(msg) {
+            if (msg.targetPeerId !== state.deviceId) return;
+            const transfer = state.activeTransfer;
+            if (!transfer || transfer.id !== msg.transferId) return;
+
+            // Assemble Blob and trigger browser download
+            const blob = new Blob(transfer.receivedChunks);
+            const downloadUrl = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = transfer.fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            finishTransferSuccess('File received and downloaded!');
+        }
+
+        function simulateIncomingShareRequest(simPeer, file, pinCode, transferId) {
+            // Show incoming share modal pretending to be from state.deviceName on simPeer
+            document.getElementById('incomingSenderName').innerText = simPeer.name;
+            document.getElementById('incomingDeviceIcon').innerText = getDeviceIcon(simPeer.deviceType);
+            document.getElementById('incomingFileName').innerText = file.name;
+            document.getElementById('incomingFileSize').innerText = formatBytes(file.size);
+            document.getElementById('incomingPinCode').innerText = pinCode;
+
+            // Trigger simulated accept
+            setTimeout(() => {
+                showToast(`${simPeer.name} accepted the transfer!`);
+                simulateFileChunkStreaming(file);
+            }, 1800);
+        }
+
+        function simulateFileChunkStreaming(file) {
+            const transfer = state.activeTransfer;
+            if (!transfer) return;
+
+            transfer.startTime = Date.now();
+            document.getElementById('transferStatusTitle').innerText = 'Transmitting data...';
+
+            let bytesSent = 0;
+            const total = file.size;
+            const interval = setInterval(() => {
+                if (!state.activeTransfer || state.activeTransfer.id !== transfer.id) {
+                    clearInterval(interval);
+                    return;
+                }
+
+                bytesSent += Math.min(total / 15, 512 * 1024);
+                if (bytesSent >= total) {
+                    bytesSent = total;
+                    clearInterval(interval);
+                    updateTransferProgress(bytesSent, total);
+                    finishTransferSuccess('Simulated file transfer complete!');
+                } else {
+                    updateTransferProgress(bytesSent, total);
+                }
+            }, 120);
+        }
+
+        function updateTransferProgress(currentBytes, totalBytes) {
+            const percent = Math.min(100, Math.round((currentBytes / totalBytes) * 100));
+            
+            const circle = document.getElementById('transferProgressCircle');
+            circle.setAttribute('stroke-dasharray', `${percent}, 100`);
+
+            document.getElementById('transferPercentText').innerText = `${percent}%`;
+            document.getElementById('transferSizeText').innerText = `${formatBytes(currentBytes)} of ${formatBytes(totalBytes)}`;
+
+            const transfer = state.activeTransfer;
+            if (transfer && transfer.startTime) {
+                const elapsedSec = (Date.now() - transfer.startTime) / 1000;
+                if (elapsedSec > 0) {
+                    const speed = currentBytes / elapsedSec;
+                    document.getElementById('transferSpeedText').innerText = `${formatBytes(speed)}/s`;
+                }
+            }
+        }
+
+        function finishTransferSuccess(message) {
+            playSound('success');
+            document.getElementById('transferStatusTitle').innerText = 'Share Complete!';
+            document.getElementById('cancelTransferBtn').classList.add('hidden');
+            document.getElementById('closeTransferBtn').classList.remove('hidden');
+            showToast(message);
+        }
+
+        function cancelActiveTransfer() {
+            if (state.activeTransfer) {
+                if (state.channel) {
+                    state.channel.postMessage({
+                        type: 'TRANSFER_CANCEL',
+                        transferId: state.activeTransfer.id,
+                        senderId: state.deviceId,
+                        targetPeerId: state.activeTransfer.peerId
+                    });
+                }
+            }
+            handleTransferCancel();
+        }
+
+        function handleTransferCancel() {
+            playSound('cancel');
+            showToast('Transfer canceled');
+            closeTransferModal();
+        }
+
+        function openTransferModal(title, peerName, fileName, fileSize) {
+            document.getElementById('transferStatusTitle').innerText = title;
+            document.getElementById('transferPeerName').innerText = peerName;
+            document.getElementById('transferFileName').innerText = fileName;
+            document.getElementById('transferSizeText').innerText = `0 KB of ${formatBytes(fileSize)}`;
+            document.getElementById('transferPercentText').innerText = '0%';
+            document.getElementById('transferSpeedText').innerText = '0 KB/s';
+            document.getElementById('transferProgressCircle').setAttribute('stroke-dasharray', '0, 100');
+
+            document.getElementById('cancelTransferBtn').classList.remove('hidden');
+            document.getElementById('closeTransferBtn').classList.add('hidden');
+
+            const modal = document.getElementById('transferModal');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        function closeTransferModal() {
+            const modal = document.getElementById('transferModal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            state.activeTransfer = null;
+        }
+
+        function showIncomingModal() {
+            const modal = document.getElementById('incomingModal');
+            const card = document.getElementById('incomingModalCard');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            card.classList.remove('translate-y-full');
+        }
+
+        function hideIncomingModal() {
+            const modal = document.getElementById('incomingModal');
+            const card = document.getElementById('incomingModalCard');
+            card.classList.add('translate-y-full');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function openDeviceNameModal() {
+            document.getElementById('deviceNameInput').value = state.deviceName;
+            document.getElementById('deviceTypeSelect').value = state.deviceType;
+            const modal = document.getElementById('deviceNameModal');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        function closeDeviceNameModal() {
+            const modal = document.getElementById('deviceNameModal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function saveDeviceSettings() {
+            const nameInput = document.getElementById('deviceNameInput').value.trim();
+            const typeInput = document.getElementById('deviceTypeSelect').value;
+
+            if (nameInput) {
+                state.deviceName = nameInput;
+                state.deviceType = typeInput;
+
+                document.getElementById('currentDeviceNameDisplay').innerText = state.deviceName;
+                document.getElementById('deviceTypeIcon').innerText = getDeviceIcon(state.deviceType);
+
+                broadcastPresence();
+                showToast('Device settings saved');
+            }
+            closeDeviceNameModal();
+        }
+
+        function toggleVisibilityModal() {
+            const modal = document.getElementById('visibilityModal');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        function closeVisibilityModal() {
+            const modal = document.getElementById('visibilityModal');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function setVisibility(val) {
+            state.visibility = val;
+            document.getElementById('visibilityText').innerText = val;
+            
+            const icon = document.getElementById('visibilityIcon');
+            if (val === 'Everyone') icon.innerText = 'visibility';
+            else if (val === 'Contacts only') icon.innerText = 'contacts';
+            else icon.innerText = 'visibility_off';
+
+            broadcastPresence();
+        }
+
+        function showToast(text) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'px-4 py-2.5 rounded-2xl bg-gray-800 text-white border border-gray-700 text-xs font-medium shadow-2xl transition-all duration-300 transform translate-y-4 opacity-0 flex items-center gap-2';
+            toast.innerHTML = `<span class="material-symbols-outlined text-md3-primary text-base">info</span> ${escapeHtml(text)}`;
+            
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-4', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('translate-y-4', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+
+        /* Utility Functions */
+        function formatBytes(bytes, decimals = 1) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        }
+
+        function base64ToArrayBuffer(base64) {
+            const binaryString = window.atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        window.onload = function() {
+            setupDragAndDrop();
+            initBroadcastChannel();
+            
+            // Set random default pixel device name
+            document.getElementById('currentDeviceNameDisplay').innerText = state.deviceName;
+        };
+    </script>
+</body>
+</html>
