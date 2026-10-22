@@ -215,11 +215,12 @@
     import * as THREE from 'three';
     import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
     // ------------------------------------------------------------------
     // 0. Settings
     // ------------------------------------------------------------------
-    const MAP_URL = 'https://vavstorage.github.io/maper.glb';   // the one shared map everybody loads
+    const MAP_URL = 'https://nickyserver.github.io/maper.glb';   // the one shared map everybody loads
     const SWIMMING = true;          // set false to walk through water instead of swimming
     const MIN_PIXEL_RATIO = 0.5;    // lowest resolution scale the adaptive quality may drop to
 
@@ -787,6 +788,9 @@
     rayShot.firstHitOnly = true;
     const tracers = [], _eul = new THREE.Euler();
     let mapBox = null, mapBoxFor = null;
+    const PLAYER_URL = 'https://vavstorage.github.io/player.glb';
+    const MODEL_YAW = Math.PI;   // glTF models usually face +Z; the game's forward is -Z. Set to 0 if players look backwards.
+    let playerTpl = null;
 
     const esc = (s) => String(s).replace(/[&<>"']/g, (c) => '&#' + c.charCodeAt(0) + ';');
     const pulse = (id, ms) => { const el = $(id); el.style.opacity = 1; setTimeout(() => (el.style.opacity = 0), ms); };
@@ -815,27 +819,59 @@
       return best || spawnPoint.clone();
     }
 
+    function buildVisual(g) {
+      const head = new THREE.Group();   // pitch target (head + gun on the fallback capsule)
+      const vis = new THREE.Group();
+      if (playerTpl) {
+        const m = cloneSkinned(playerTpl.scene);
+        m.position.set(-playerTpl.cx, -playerTpl.minY, -playerTpl.cz);
+        m.traverse((o) => { o.frustumCulled = false; });
+        const pivot = new THREE.Group();
+        pivot.add(m);
+        pivot.scale.setScalar(playerTpl.s);
+        pivot.rotation.y = MODEL_YAW;
+        pivot.position.y = -0.6;   // feet sit 0.6 below the eye
+        vis.add(pivot);
+      } else {
+        const mat = new THREE.MeshLambertMaterial({ color: COLORS[g.userData.color % COLORS.length] });
+        const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.2, 4, 10), mat);
+        body.position.y = -0.33;
+        head.add(new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), mat));
+        const gun = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.3), new THREE.MeshBasicMaterial({ color: 0x222222 }));
+        gun.position.set(0.12, -0.1, -0.2);
+        head.add(gun);
+        vis.add(body, head);
+      }
+      if (g.userData.vis) g.remove(g.userData.vis);
+      g.add(vis);
+      g.userData.vis = vis; g.userData.head = head;
+    }
+
     function makeMesh(p) {
       const g = new THREE.Group();
-      const mat = new THREE.MeshLambertMaterial({ color: COLORS[p.color % COLORS.length] });
-      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.2, 4, 10), mat);
-      body.position.y = -0.33;
-      const head = new THREE.Group();
-      head.add(new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), mat));
-      const gun = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.3), new THREE.MeshBasicMaterial({ color: 0x222222 }));
-      gun.position.set(0.12, -0.1, -0.2);
-      head.add(gun);
+      g.userData.color = p.color;
+      buildVisual(g);
       const c = document.createElement('canvas'); c.width = 256; c.height = 64;
       const x = c.getContext('2d');
-      x.font = 'bold 36px Arial'; x.textAlign = 'center'; x.lineWidth = 6; x.strokeStyle = '#000'; x.fillStyle = '#fff';
+      x.font = 'bold 36px Arial'; x.textAlign = 'center'; x.lineWidth = 6; x.strokeStyle = '#000';
+      x.fillStyle = '#' + COLORS[p.color % COLORS.length].toString(16).padStart(6, '0');
       x.strokeText(p.name, 128, 44); x.fillText(p.name, 128, 44);
       const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, fog: false }));
       tag.scale.set(0.8, 0.2, 1); tag.position.y = 0.3; tag.renderOrder = 10;
-      g.add(body, head, tag);
-      g.userData.head = head; g.visible = false;
+      g.add(tag);
+      g.visible = false;
       scene.add(g);
       return g;
     }
+
+    // Load the shared player model once, scaled to the hitbox (~0.72 tall); players use a capsule until it arrives.
+    loader.load(PLAYER_URL, (gltf) => {
+      const sc = gltf.scene;
+      sc.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(sc), ctr = box.getCenter(new THREE.Vector3());
+      playerTpl = { scene: sc, s: 0.72 / (box.max.y - box.min.y), cx: ctr.x, cz: ctr.z, minY: box.min.y };
+      for (const q of Object.values(net.players)) if (q.mesh) buildVisual(q.mesh);
+    }, undefined, (e) => console.warn('player.glb failed to load, using capsule players', e));
 
     function addPlayer(id, name, color, o = {}) {
       if (net.players[id]) return net.players[id];
