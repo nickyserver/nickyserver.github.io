@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3D First-Person Viewer Game</title>
+  <title>Nicky Server</title>
   <style>
     body {
       margin: 0;
@@ -125,6 +125,9 @@
     #plist,#score{min-width:220px;font-size:14px;text-align:left}
     .row2{display:flex;justify-content:space-between;gap:20px;padding:2px 0}
     #hud{display:none}
+    #locator{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:360px;height:26px;background:rgba(0,0,0,.45);border:1px solid #888;border-radius:13px;overflow:hidden;z-index:5;pointer-events:none}
+    #locator::after{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.35)}
+    .mk{position:absolute;top:0;height:100%;transform:translateX(-50%);font:bold 12px Arial;line-height:26px;white-space:nowrap;text-shadow:0 0 3px #000}
     #hpWrap{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);width:240px;height:14px;background:rgba(0,0,0,.5);border:1px solid #888;z-index:5}
     #hpBar{height:100%;width:100%;background:#4c4;transition:width .15s}
     #roomTag{position:absolute;top:8px;right:10px;color:#ffd040;font:bold 14px monospace;z-index:5}
@@ -166,7 +169,7 @@
 
   <div id="blocker">
     <div class="card">
-      <h1>3D Model Walkthrough</h1>
+      <h1>Nicky Server</h1>
 
       <label class="file-upload-btn" style="display:none">
         📁 Choose .GLB / .GLTF File
@@ -205,7 +208,7 @@
   <div id="crosshair">+</div>
   <div id="fps"></div>
   <div id="hud">
-    <div id="roomTag"></div><div id="feed"></div>
+    <div id="locator"></div><div id="roomTag"></div><div id="feed"></div>
     <div id="hpWrap"><div id="hpBar"></div></div>
     <div id="score"></div><div id="hitm">✕</div><div id="flash"></div>
     <div id="dead"><div>ELIMINATED<small id="deadBy"></small></div></div>
@@ -559,7 +562,7 @@
         } catch (e) { /* try the next name */ }
       }
       if (token === loadToken) {
-        setStatus('Could not load the map from nickyserver.github.io. Check your connection and reload.', true);
+        setStatus('Could not load the map from vavstorage.github.io. Check your connection and reload.', true);
         setLoading(false);
       }
     })();
@@ -1104,6 +1107,33 @@
         t.l.material.opacity = 1 - t.t / 0.12;
         if (t.t >= 0.12) { scene.remove(t.l); t.l.geometry.dispose(); t.l.material.dispose(); tracers.splice(i, 1); }
       }
+      updateLocator();
+    }
+
+    // Locator bar: where other players are relative to where you're facing (centre = straight ahead, edges = +/-90 deg)
+    const LOC_W = 360, LOC_RANGE = Math.PI / 2, locEls = {};
+    function updateLocator() {
+      const bar = $('locator'), pos = camera.position, here = {};
+      for (const id in net.players) {
+        const p = net.players[id];
+        if (id === net.id || !p.alive || !p.seen) continue;
+        here[id] = 1;
+        let el = locEls[id];
+        if (!el) {
+          el = locEls[id] = document.createElement('div');
+          el.className = 'mk';
+          el.style.color = '#' + COLORS[p.color % COLORS.length].toString(16).padStart(6, '0');
+          bar.appendChild(el);
+        }
+        const dx = p.pos.x - pos.x, dz = p.pos.z - pos.z, dy = p.pos.y - pos.y;
+        let rel = Math.atan2(-dx, -dz) - _eul.y;
+        rel = Math.atan2(Math.sin(rel), Math.cos(rel));   // + = target is to your left
+        const c = Math.max(-1, Math.min(1, rel / LOC_RANGE));
+        el.style.left = (LOC_W / 2 - c * (LOC_W / 2 - 28)) + 'px';
+        el.style.opacity = Math.abs(rel) > LOC_RANGE ? 0.45 : 1;
+        el.textContent = '● ' + Math.round(Math.hypot(dx, dz)) + 'm' + (dy > 0.4 ? ' ▲' : dy < -0.4 ? ' ▼' : '');
+      }
+      for (const id in locEls) if (!here[id]) { locEls[id].remove(); delete locEls[id]; }
     }
 
     // ---- room lifecycle / menu ------------------------------------------
@@ -1128,6 +1158,7 @@
       Object.assign(net, { on: false, peer: null, conns: [], hostConn: null, isHost: false, players: {}, nextId: 1, code: '' });
       isDead = false; firing = false;
       $('dead').style.display = 'none'; $('hud').style.display = 'none'; $('feed').innerHTML = '';
+      for (const id in locEls) { locEls[id].remove(); delete locEls[id]; }
       $('mpRoom').style.display = 'none'; $('mpHome').style.display = 'flex'; startBtn.style.display = '';
       setMp(msg);
       if (controls.isLocked) controls.unlock();
