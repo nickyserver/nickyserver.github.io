@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D First-Person Viewer Game</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #000;
+      font-family: Arial, sans-serif;
+    }
+
+    /* Fullscreen menu overlay */
+    #blocker {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.85);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #ffffff;
+      text-align: center;
+      z-index: 10;
+    }
+
+    .card {
+      background: #222;
+      padding: 30px 40px;
+      border-radius: 12px;
+      border: 1px solid #444;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      align-items: center;
+    }
+
+    h1 {
+      margin: 0 0 10px 0;
+      font-size: 28px;
+    }
+
+    /* File Input Styling */
+    .file-upload-btn {
+      background-color: #333;
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 6px;
+      border: 1px solid #555;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    .file-upload-btn:hover {
+      background-color: #444;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    /* Start Game Button */
+    #startBtn {
+      background-color: #28a745;
+      color: white;
+      border: none;
+      padding: 12px 28px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: transform 0.1s, background 0.2s;
+    }
+
+    #startBtn:hover:not(:disabled) {
+      background-color: #218838;
+      transform: scale(1.03);
+    }
+
+    #startBtn:disabled {
+      background-color: #555;
+      cursor: progress;
+    }
+
+    .instructions-text {
+      font-size: 14px;
+      color: #aaa;
+      margin-top: 10px;
+    }
+
+    #file-name {
+      font-size: 13px;
+      color: #28a745;
+    }
+
+    #file-name.warn {
+      color: #e0a030;
+    }
+
+    /* Crosshair */
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 18px;
+      pointer-events: none;
+      z-index: 5;
+      user-select: none;
+    }
+
+    .inp{background:#111;color:#fff;border:1px solid #555;border-radius:6px;padding:9px 12px;font-size:14px;text-align:center;width:150px}
+    .mp{display:flex;flex-direction:column;gap:10px;align-items:center;border-top:1px solid #444;padding-top:14px;width:100%}
+    .mpbtn,#resumeBtn{background:#2d6cdf;color:#fff;border:none;padding:10px 22px;font-size:15px;font-weight:bold;border-radius:6px;cursor:pointer}
+    .mpbtn:disabled,#resumeBtn:disabled{background:#555;cursor:progress}
+    #resumeBtn{background:#28a745;font-size:18px;padding:12px 28px}
+    #roomCode{font:bold 34px monospace;letter-spacing:6px;color:#ffd040;cursor:pointer}
+    #mpStatus{font-size:13px;color:#e0a030;min-height:16px}
+    #plist,#score{min-width:220px;font-size:14px;text-align:left}
+    .row2{display:flex;justify-content:space-between;gap:20px;padding:2px 0}
+    #hud{display:none}
+    #hpWrap{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);width:240px;height:14px;background:rgba(0,0,0,.5);border:1px solid #888;z-index:5}
+    #hpBar{height:100%;width:100%;background:#4c4;transition:width .15s}
+    #roomTag{position:absolute;top:8px;right:10px;color:#ffd040;font:bold 14px monospace;z-index:5}
+    #feed{position:absolute;top:32px;right:10px;color:#fff;font:13px Arial;text-align:right;z-index:5;text-shadow:0 0 3px #000}
+    #score{position:absolute;top:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;padding:12px 16px;border-radius:8px;z-index:6;display:none}
+    #hitm{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#f44;font-size:26px;opacity:0;pointer-events:none;z-index:5}
+    #flash{position:absolute;inset:0;background:rgba(255,0,0,.35);opacity:0;pointer-events:none;transition:opacity .25s;z-index:4}
+    #dead{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(80,0,0,.5);color:#fff;font:bold 40px Arial;z-index:6;pointer-events:none;text-align:center}
+    #dead small{display:block;font-size:16px;font-weight:normal;margin-top:6px}
+
+    /* FPS counter (toggle with F) */
+    #fps {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      color: #9f9;
+      font: 12px monospace;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 3px 6px;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 5;
+      display: none;
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+        "three-mesh-bvh": "https://unpkg.com/three-mesh-bvh@0.7.3/build/index.module.js"
+      }
+    }
+  </script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+  <div id="blocker">
+    <div class="card">
+      <h1>3D Model Walkthrough</h1>
+
+      <label class="file-upload-btn" style="display:none">
+        📁 Choose .GLB / .GLTF File
+        <input type="file" id="fileInput" accept=".glb,.gltf" />
+      </label>
+      <span id="file-name">Looking for model.glb…</span>
+
+      <input id="nameInput" class="inp" maxlength="12" placeholder="Your name">
+      <button id="startBtn">CLICK TO PLAY</button>
+      <div id="mpHome" class="mp">
+        <b>MULTIPLAYER PVP</b>
+        <button id="hostBtn" class="mpbtn">Host game</button>
+        <div style="display:flex;gap:8px">
+          <input id="codeInput" class="inp" style="width:90px;text-transform:uppercase" maxlength="5" placeholder="CODE">
+          <button id="joinBtn" class="mpbtn">Join</button>
+        </div>
+      </div>
+      <div id="mpRoom" class="mp" style="display:none">
+        <div>Join code (click to copy)</div>
+        <div id="roomCode"></div>
+        <div id="plist"></div>
+        <button id="resumeBtn">RESUME</button>
+        <button id="leaveBtn" class="mpbtn">Leave game</button>
+      </div>
+      <div id="mpStatus"></div>
+
+      <div class="instructions-text">
+        <b>Controls:</b><br>
+        <b>W, A, S, D</b> = Move / Swim<br>
+        <b>SPACEBAR</b> = Jump / Swim Up<br>
+        <b>MOUSE</b> = Look & Steer | <b>F</b> = FPS counter | <b>ESC</b> = Menu<br><b>LEFT CLICK</b> = Shoot (multiplayer) | <b>TAB</b> = Scoreboard
+      </div>
+    </div>
+  </div>
+
+  <div id="crosshair">+</div>
+  <div id="fps"></div>
+  <div id="hud">
+    <div id="roomTag"></div><div id="feed"></div>
+    <div id="hpWrap"><div id="hpBar"></div></div>
+    <div id="score"></div><div id="hitm">✕</div><div id="flash"></div>
+    <div id="dead"><div>ELIMINATED<small id="deadBy"></small></div></div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    // ------------------------------------------------------------------
+    // 0. Settings
+    // ------------------------------------------------------------------
+    const MAP_URL = 'https://vavstorage.github.io/maper.glb';   // the one shared map everybody loads
+    const SWIMMING = true;          // set false to walk through water instead of swimming
+    const MIN_PIXEL_RATIO = 0.5;    // lowest resolution scale the adaptive quality may drop to
+
+    // ------------------------------------------------------------------
+    // 1. BVH-accelerated raycasting (huge win on dense models).
+    //    Loaded dynamically so the game still runs (slower) if the CDN is unreachable.
+    // ------------------------------------------------------------------
+    const bvhReady = import('three-mesh-bvh').then((bvh) => {
+      THREE.BufferGeometry.prototype.computeBoundsTree = bvh.computeBoundsTree;
+      THREE.BufferGeometry.prototype.disposeBoundsTree = bvh.disposeBoundsTree;
+      THREE.Mesh.prototype.raycast = bvh.acceleratedRaycast;
+      return true;
+    }).catch((err) => {
+      console.warn('three-mesh-bvh failed to load, falling back to slow raycasting:', err);
+      return false;
+    });
+
+    // ------------------------------------------------------------------
+    // 2. Scene, Camera & Renderer
+    // ------------------------------------------------------------------
+    const scene = new THREE.Scene();
+    const skyColor = new THREE.Color(0x87ceeb);
+    const waterSkyColor = new THREE.Color(0x003366);
+    scene.background = skyColor.clone();
+
+    // FogExp2 for exponential density fog
+    const clearFogDensity = 0.005;
+    const waterFogDensity = 0.08;
+    scene.fog = new THREE.FogExp2(skyColor, clearFogDensity);
+
+    // --- PLAYER SCALE SETTINGS ---
+    const playerHeight = 0.6;
+    const playerRadius = 0.25;
+    const maxStepHeight = 0.2;
+
+    // Fog hides everything past ~500 units, so a 1000 far plane only wastes depth precision.
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 700);
+    camera.position.set(0, playerHeight + 50, 0);
+
+    const maxPixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    let currentPixelRatio = maxPixelRatio;
+    let pixelRatioCeiling = maxPixelRatio;
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: (window.devicePixelRatio || 1) < 2,   // MSAA is wasted work on hi-dpi screens
+      powerPreference: 'high-performance'
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(currentPixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    let needsRender = true; // render on demand while the menu is open
+
+    // ------------------------------------------------------------------
+    // 3. Controls & Blocker UI
+    // ------------------------------------------------------------------
+    const controls = new PointerLockControls(camera, document.body);
+    const blocker = document.getElementById('blocker');
+    const startBtn = document.getElementById('startBtn');
+    const fpsEl = document.getElementById('fps');
+    const resumeBtn = document.getElementById('resumeBtn');
+    const hostBtn = document.getElementById('hostBtn');
+    const joinBtn = document.getElementById('joinBtn');
+
+    startBtn.addEventListener('click', () => {
+      controls.lock();
+    });
+
+    controls.addEventListener('lock', () => {
+      blocker.style.display = 'none';
+      prevTime = performance.now();
+    });
+
+    controls.addEventListener('unlock', () => {
+      blocker.style.display = 'flex';
+      // release keys so the player doesn't keep walking when the menu opens
+      moveForward = moveBackward = moveLeft = moveRight = spacePressed = false;
+      needsRender = true;
+    });
+
+    scene.add(controls.getObject());
+
+    // ------------------------------------------------------------------
+    // 4. Physics & Water Configuration
+    // ------------------------------------------------------------------
+    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, spacePressed = false;
+    let canJump = false;
+    let isGrounded = false;
+    let isUnderwater = false;
+    let isDead = false, firing = false;
+    const net = { on: false };
+    let fogIsUnderwater = false;
+    let currentWaterSurfaceY = 0;
+
+    const velocity = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+
+    // Physics Constants
+    const moveSpeed = 5.0;
+    const waterMoveSpeed = 2.2;
+    const gravity = 25.0;
+    const fallMultiplier = 1.4;
+    const jumpStrength = 8.5;
+    const terminalVelocity = -35.0;
+    const groundDamping = 10.0;
+    const airDamping = 2.0;
+
+    // Raycasters (firstHitOnly lets the BVH stop at the nearest triangle)
+    const raycasterDown = new THREE.Raycaster();
+    const raycasterUp = new THREE.Raycaster();
+    const raycasterHorizontal = new THREE.Raycaster();
+    raycasterDown.firstHitOnly = raycasterUp.firstHitOnly = raycasterHorizontal.firstHitOnly = true;
+
+    // Reusable scratch objects (no per-frame allocations)
+    const _camDir = new THREE.Vector3();
+    const _sideDir = new THREE.Vector3();
+    const _moveVec = new THREE.Vector3();
+    const _oldPos = new THREE.Vector3();
+    const _origin = new THREE.Vector3();
+    const _dir = new THREE.Vector3();
+    const _up = new THREE.Vector3(0, 1, 0);
+    const _down = new THREE.Vector3(0, -1, 0);
+
+    // Cached once per model load instead of every frame
+    const waterMeshes = [];
+    const solidTargets = [];
+    const waterBox = new THREE.Box3();
+    let hasWater = false;
+    const spawnPoint = new THREE.Vector3(0, playerHeight + 50, 0);
+
+    const onKeyDown = (e) => {
+      if (e.code === 'Tab') { e.preventDefault(); if (net.on) $('score').style.display = 'block'; return; }
+      if (isDead && e.code !== 'KeyF') return;
+      switch (e.code) {
+        case 'KeyW': case 'ArrowUp': moveForward = true; break;
+        case 'KeyA': case 'ArrowLeft': moveLeft = true; break;
+        case 'KeyS': case 'ArrowDown': moveBackward = true; break;
+        case 'KeyD': case 'ArrowRight': moveRight = true; break;
+        case 'KeyF':
+          if (!e.repeat) fpsEl.style.display = fpsEl.style.display === 'block' ? 'none' : 'block';
+          break;
+        case 'Space':
+          spacePressed = true;
+          if (canJump) {
+            velocity.y = jumpStrength;
+            canJump = false;
+            isGrounded = false;
+          }
+          break;
+      }
+    };
+
+    const onKeyUp = (e) => {
+      if (e.code === 'Tab') { $('score').style.display = 'none'; return; }
+      switch (e.code) {
+        case 'KeyW': case 'ArrowUp': moveForward = false; break;
+        case 'KeyA': case 'ArrowLeft': moveLeft = false; break;
+        case 'KeyS': case 'ArrowDown': moveBackward = false; break;
+        case 'KeyD': case 'ArrowRight': moveRight = false; break;
+        case 'Space': spacePressed = false; break;
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+
+    // ------------------------------------------------------------------
+    // 5. Lighting
+    // ------------------------------------------------------------------
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+
+    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+    sun.position.set(20, 40, 20);
+    scene.add(sun);
+
+    // ------------------------------------------------------------------
+    // 6. Model loading
+    // ------------------------------------------------------------------
+    let loadedModel = null;
+    let loadToken = 0;
+    const loader = new GLTFLoader();
+
+    const fileInput = document.getElementById('fileInput');
+    const fileNameDisplay = document.getElementById('file-name');
+
+    function setStatus(text, warn = false) {
+      fileNameDisplay.textContent = text;
+      fileNameDisplay.classList.toggle('warn', warn);
+    }
+
+    function setLoading(isLoading) {
+      startBtn.disabled = hostBtn.disabled = joinBtn.disabled = resumeBtn.disabled = isLoading;
+      startBtn.textContent = isLoading ? 'LOADING…' : 'CLICK TO PLAY';
+    }
+
+    function disposeModel(model) {
+      model.traverse((o) => {
+        if (!o.isMesh) return;
+        if (o.geometry) {
+          if (o.geometry.disposeBoundsTree) o.geometry.disposeBoundsTree();
+          o.geometry.dispose();
+        }
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        for (const m of mats) {
+          if (!m) continue;
+          for (const key in m) if (m[key] && m[key].isTexture) m[key].dispose();
+          m.dispose();
+        }
+      });
+    }
+
+    async function setModel(root) {
+      const hasBVH = await bvhReady;
+
+      if (loadedModel) {
+        scene.remove(loadedModel);
+        disposeModel(loadedModel);
+      }
+      loadedModel = root;
+
+      waterMeshes.length = 0;
+      solidTargets.length = 0;
+      waterBox.makeEmpty();
+
+      root.updateMatrixWorld(true);
+
+      const maxAniso = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+
+      root.traverse((child) => {
+        if (!child.isMesh) return;
+
+        const isWater = child.name.toLowerCase().includes('water');
+        if (isWater) {
+          waterMeshes.push(child);
+          waterBox.expandByObject(child);
+          child.material.transparent = true;
+          child.material.opacity = 0.4;
+          child.material.depthWrite = false;
+          child.material.color.set(0x0055ff);
+        } else {
+          solidTargets.push(child);
+          if (hasBVH && !child.geometry.boundsTree) child.geometry.computeBoundsTree();
+        }
+
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        for (const m of mats) if (m && m.map) m.map.anisotropy = maxAniso;
+      });
+      hasWater = waterMeshes.length > 0;
+
+      // The model never moves: stop three.js from re-walking/recomputing its matrices every frame.
+      root.matrixAutoUpdate = false;
+      root.matrixWorldAutoUpdate = false;
+
+      scene.add(root);
+      placePlayer();
+      needsRender = true;
+    }
+
+    // Drop the player onto the terrain at the map centre
+    function placePlayer() {
+      const box = new THREE.Box3().setFromObject(loadedModel);
+      let spawned = false;
+      if (!box.isEmpty() && solidTargets.length) {
+        raycasterDown.far = Infinity;
+        raycasterDown.set(_origin.set(0, box.max.y + 5, 0), _down);
+        const hits = raycasterDown.intersectObjects(solidTargets, false);
+        if (hits.length) {
+          spawnPoint.set(0, hits[0].point.y + playerHeight, 0);
+          spawned = true;
+        }
+      }
+      if (!spawned) spawnPoint.set(0, playerHeight + 50, 0);
+      camera.position.copy(spawnPoint);
+      velocity.set(0, 0, 0);
+    }
+
+    function loadModelFromURL(url, onProgress) {
+      return new Promise((resolve, reject) => {
+        loader.load(url, (gltf) => resolve(gltf.scene), onProgress, reject);
+      });
+    }
+
+    function progressReporter(label, token) {
+      return (e) => {
+        if (token !== loadToken) return;
+        if (e.lengthComputable && e.total > 0) {
+          setStatus(`Loading ${label}… ${Math.round((e.loaded / e.total) * 100)}%`);
+        } else {
+          setStatus(`Loading ${label}… ${(e.loaded / 1048576).toFixed(1)} MB`);
+        }
+      };
+    }
+
+    fileInput.addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const token = ++loadToken;
+      setLoading(true);
+      setStatus(`Loading ${file.name}…`);
+      const url = URL.createObjectURL(file);
+
+      try {
+        const root = await loadModelFromURL(url, progressReporter(file.name, token));
+        if (token !== loadToken) return;
+        setStatus('Preparing collision…');
+        await new Promise(requestAnimationFrame); // let the status text paint before the BVH build
+        await setModel(root);
+        setStatus(`Loaded: ${file.name}`);
+      } catch (error) {
+        console.error('Error loading 3D file:', error);
+        if (token === loadToken) {
+          setStatus('Failed to load file', true);
+          alert('Failed to load file. Please select a valid .glb or .gltf model.');
+        }
+      } finally {
+        URL.revokeObjectURL(url);
+        if (token === loadToken) setLoading(false);
+      }
+    });
+
+    // Default world: model.glb (or maper.glb) next to this page, if present
+    (async function loadDefault() {
+      const token = ++loadToken;
+      setLoading(true);
+      for (const name of [MAP_URL]) {
+        try {
+          const root = await loadModelFromURL(name, progressReporter(name, token));
+          if (token !== loadToken) return;   // the user picked a file meanwhile
+          setStatus('Preparing collision…');
+          await new Promise(requestAnimationFrame);
+          await setModel(root);
+          setStatus(`Loaded: ${name}`);
+          setLoading(false);
+          return;
+        } catch (e) { /* try the next name */ }
+      }
+      if (token === loadToken) {
+        setStatus('Could not load the map from nickyserver.github.io. Check your connection and reload.', true);
+        setLoading(false);
+      }
+    })();
+
+    // ------------------------------------------------------------------
+    // 7. Collision helpers
+    // ------------------------------------------------------------------
+    // Is there a wall within reach when stepping (dx, dz) from (x, y, z)?  Casts at step-height so
+    // small bumps can be walked over.
+    function wallBlocked(x, y, z, dx, dz) {
+      const len = Math.hypot(dx, dz);
+      if (len < 1e-6) return false;
+      _origin.set(x, y - playerHeight + maxStepHeight + 0.05, z);
+      _dir.set(dx / len, 0, dz / len);
+      const reach = playerRadius + len;
+      raycasterHorizontal.set(_origin, _dir);
+      raycasterHorizontal.far = reach;
+      const hits = raycasterHorizontal.intersectObjects(solidTargets, false);
+      return hits.length > 0 && hits[0].distance < reach;
+    }
+
+    // ------------------------------------------------------------------
+    // 8. Game update
+    // ------------------------------------------------------------------
+    function update(delta) {
+      const pos = camera.position;
+
+      // --- CHECK IF PLAYER IS UNDERWATER (cached bounds; the water is an infinite-depth plane) ---
+      isUnderwater = SWIMMING && hasWater &&
+        pos.x >= waterBox.min.x && pos.x <= waterBox.max.x &&
+        pos.z >= waterBox.min.z && pos.z <= waterBox.max.z &&
+        pos.y < waterBox.max.y;
+      if (isUnderwater) currentWaterSurfaceY = waterBox.max.y;
+
+      // --- UPDATE VISUALS & EXPONENTIAL BLUE FOG (only when the state flips) ---
+      if (isUnderwater !== fogIsUnderwater) {
+        fogIsUnderwater = isUnderwater;
+        scene.background.copy(isUnderwater ? waterSkyColor : skyColor);
+        scene.fog.color.copy(isUnderwater ? waterSkyColor : skyColor);
+        scene.fog.density = isUnderwater ? waterFogDensity : clearFogDensity;
+      }
+
+      // --- A. APPLY PHYSICS (WATER VS LAND) ---
+      let currentDamping = isGrounded ? groundDamping : airDamping;
+      const currentMoveSpeed = isUnderwater ? waterMoveSpeed : moveSpeed;
+
+      if (isUnderwater) {
+        currentDamping = 5.0;
+
+        if (pos.y < currentWaterSurfaceY - 0.2) {
+          velocity.y = spacePressed ? 3.0 : 1.2;
+        } else {
+          velocity.y = 0;
+        }
+      } else {
+        velocity.y -= gravity * (velocity.y < 0 ? fallMultiplier : 1) * delta;
+      }
+
+      velocity.x -= velocity.x * currentDamping * delta;
+      velocity.z -= velocity.z * currentDamping * delta;
+      if (!isUnderwater) {
+        velocity.y = Math.max(velocity.y, terminalVelocity);
+      }
+
+      // --- B. USER MOVEMENT DIRECTION ---
+      if (isUnderwater) {
+        camera.getWorldDirection(_camDir);
+        _sideDir.set(-_camDir.z, 0, _camDir.x).normalize();
+
+        const forwardInput = Number(moveForward) - Number(moveBackward);
+        const rightInput = Number(moveRight) - Number(moveLeft);
+
+        if (forwardInput !== 0 || rightInput !== 0) {
+          _moveVec.set(0, 0, 0);
+          if (forwardInput !== 0) _moveVec.addScaledVector(_camDir, forwardInput);
+          if (rightInput !== 0) _moveVec.addScaledVector(_sideDir, rightInput);
+          _moveVec.normalize();
+
+          velocity.x = _moveVec.x * currentMoveSpeed;
+          velocity.y = _moveVec.y * currentMoveSpeed;
+          velocity.z = _moveVec.z * currentMoveSpeed;
+        } else {
+          const drag = Math.pow(0.8, delta * 60);   // frame-rate independent
+          velocity.x *= drag;
+          velocity.z *= drag;
+        }
+      } else {
+        direction.z = Number(moveForward) - Number(moveBackward);
+        direction.x = Number(moveRight) - Number(moveLeft);
+        direction.normalize();
+
+        const accel = isGrounded ? moveSpeed : moveSpeed * 0.3;
+        if (moveForward || moveBackward) velocity.z -= direction.z * accel * delta * 10;
+        if (moveLeft || moveRight) velocity.x -= direction.x * accel * delta * 10;
+      }
+
+      // --- C. POSITION UPDATE ---
+      _oldPos.copy(pos);
+
+      if (isUnderwater) {
+        pos.x += velocity.x * delta;
+        pos.y += velocity.y * delta;
+        pos.z += velocity.z * delta;
+      } else {
+        controls.moveRight(-velocity.x * delta);
+        controls.moveForward(-velocity.z * delta);
+        pos.y += velocity.y * delta;
+      }
+
+      const hasSolids = solidTargets.length > 0;
+
+      // Walls: block the move, but slide along the wall instead of sticking to it
+      if (hasSolids) {
+        const dx = pos.x - _oldPos.x;
+        const dz = pos.z - _oldPos.z;
+        if (dx * dx + dz * dz > 1e-8 && wallBlocked(_oldPos.x, _oldPos.y, _oldPos.z, dx, dz)) {
+          pos.x = _oldPos.x;
+          pos.z = _oldPos.z;
+          if (Math.abs(dx) > 1e-6 && !wallBlocked(_oldPos.x, _oldPos.y, _oldPos.z, dx, 0)) pos.x += dx;
+          if (Math.abs(dz) > 1e-6 && !wallBlocked(_oldPos.x, _oldPos.y, _oldPos.z, 0, dz)) pos.z += dz;
+        }
+      }
+
+      // --- D. CEILING & GROUND DETECTION ---
+      isGrounded = false;
+
+      if (hasSolids) {
+        if (!isUnderwater && velocity.y > 0) {
+          _origin.set(pos.x, pos.y - playerHeight, pos.z);
+          raycasterUp.set(_origin, _up);
+          raycasterUp.far = playerHeight;
+          const ceilingHits = raycasterUp.intersectObjects(solidTargets, false);
+          if (ceilingHits.length > 0) {
+            pos.y = ceilingHits[0].point.y;
+            velocity.y = 0;
+          }
+        }
+
+        // Start the ray from the higher of old/new height so a fast fall can't tunnel through the floor
+        const startY = Math.max(pos.y, _oldPos.y);
+        _origin.set(pos.x, startY, pos.z);
+        raycasterDown.set(_origin, _down);
+        raycasterDown.far = (startY - pos.y) + playerHeight + maxStepHeight;
+        const surfaceHits = raycasterDown.intersectObjects(solidTargets, false);
+
+        if (surfaceHits.length > 0) {
+          const groundY = surfaceHits[0].point.y;
+          const targetY = groundY + playerHeight;
+
+          if (isUnderwater) {
+            // swimming: just don't sink into the sea floor
+            if (pos.y < targetY) {
+              pos.y = targetY;
+              if (velocity.y < 0) velocity.y = 0;
+            }
+          } else if (velocity.y <= 0 && pos.y - groundY <= playerHeight + maxStepHeight) {
+            const k = 1 - Math.pow(0.5, delta * 60);   // frame-rate independent smoothing
+            pos.y = THREE.MathUtils.lerp(pos.y, targetY, k);
+            velocity.y = 0;
+            canJump = true;
+            isGrounded = true;
+          }
+        }
+      }
+
+      if (pos.y < -30) {
+        pos.copy(net.on ? pickSpawn() : spawnPoint);
+        velocity.set(0, 0, 0);
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // 9. Adaptive resolution + FPS counter
+    // ------------------------------------------------------------------
+    let emaDt = 1 / 60;
+    let lastAdapt = 0;
+    let frames = 0;
+    let fpsStamp = performance.now();
+
+    function applyPixelRatio(value) {
+      currentPixelRatio = value;
+      renderer.setPixelRatio(value);
+      emaDt = 0.0215; // neutral value so we don't immediately re-trigger
+    }
+
+    function adaptResolution(dt, now) {
+      if (dt > 0.1) return;                // ignore stalls (tab switch, model load...)
+      emaDt += (dt - emaDt) * 0.05;
+      if (now - lastAdapt < 1500) return;
+
+      if (emaDt > 0.026 && currentPixelRatio > MIN_PIXEL_RATIO) {
+        // below ~38 fps: render fewer pixels
+        const justRaised = now - lastAdapt < 8000 && currentPixelRatio >= pixelRatioCeiling - 1e-3;
+        applyPixelRatio(Math.max(MIN_PIXEL_RATIO, currentPixelRatio * 0.85));
+        if (justRaised) pixelRatioCeiling = currentPixelRatio; // that level was too heavy, stop retrying it
+        lastAdapt = now;
+      } else if (emaDt < 0.0185 && currentPixelRatio < pixelRatioCeiling && now - lastAdapt > 5000) {
+        // comfortably at ~60 fps: try a sharper image again
+        applyPixelRatio(Math.min(pixelRatioCeiling, currentPixelRatio / 0.85));
+        lastAdapt = now;
+      }
+    }
+
+    function updateFps(now) {
+      frames++;
+      if (now - fpsStamp >= 500) {
+        if (fpsEl.style.display === 'block') {
+          fpsEl.textContent = `${Math.round((frames * 1000) / (now - fpsStamp))} fps | res ${currentPixelRatio.toFixed(2)}x`;
+        }
+        frames = 0;
+        fpsStamp = now;
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // 10. Main loop
+    // ------------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // 9b. Multiplayer PvP (PeerJS/WebRTC). Host = authority for health & scores; join code = room id.
+    // ------------------------------------------------------------------
+    const $ = (id) => document.getElementById(id);
+    const COLORS = [0xff4040, 0x40a0ff, 0x40ff70, 0xffd040, 0xc060ff, 0xff8030, 0x30e0e0, 0xff60b0];
+    const MAX_PLAYERS = 8, DMG = 25, FIRE_GAP = 200, RANGE = 300, RESPAWN_MS = 3000, ID_PREFIX = 'mapfps-';
+    Object.assign(net, { peer: null, conns: [], hostConn: null, isHost: false, id: '0', code: '', players: {}, nextId: 1, lastShot: 0, lastSend: 0, timer: 0 });
+    const rayShot = new THREE.Raycaster();
+    rayShot.firstHitOnly = true;
+    const tracers = [], _eul = new THREE.Euler();
+    let mapBox = null, mapBoxFor = null;
+
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => '&#' + c.charCodeAt(0) + ';');
+    const pulse = (id, ms) => { const el = $(id); el.style.opacity = 1; setTimeout(() => (el.style.opacity = 0), ms); };
+    const myName = () => ($('nameInput').value.trim() || 'Player' + (100 + Math.floor(Math.random() * 900))).slice(0, 12);
+    const genCode = () => Array.from({ length: 5 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
+    const setMp = (t) => { $('mpStatus').textContent = t || ''; };
+    const pub = (p) => ({ id: p.id, name: p.name, color: p.color, kills: p.kills, deaths: p.deaths, hp: p.hp, alive: p.alive, pos: p.pos.toArray() });
+
+    function pickSpawn() {
+      if (!loadedModel || !solidTargets.length) return spawnPoint.clone();
+      if (mapBoxFor !== loadedModel) { mapBox = new THREE.Box3().setFromObject(loadedModel); mapBoxFor = loadedModel; }
+      const others = Object.values(net.players).filter((p) => p.id !== net.id && p.alive && p.pos.y > -900);
+      let best = null, bestScore = -1, found = 0;
+      for (let i = 0; i < 80 && found < 8; i++) {
+        const x = THREE.MathUtils.lerp(mapBox.min.x, mapBox.max.x, 0.1 + Math.random() * 0.8);
+        const z = THREE.MathUtils.lerp(mapBox.min.z, mapBox.max.z, 0.1 + Math.random() * 0.8);
+        raycasterDown.far = Infinity;
+        raycasterDown.set(_origin.set(x, mapBox.max.y + 5, z), _down);
+        const h = raycasterDown.intersectObjects(solidTargets, false)[0];
+        if (!h || (hasWater && h.point.y < waterBox.max.y + 0.3) || (h.face && h.face.normal.y < 0.7)) continue;
+        found++;
+        const c = new THREE.Vector3(x, h.point.y + playerHeight, z);
+        const s = others.length ? Math.min(...others.map((p) => c.distanceTo(p.pos))) : 1;
+        if (s > bestScore) { bestScore = s; best = c; }
+      }
+      return best || spawnPoint.clone();
+    }
+
+    function makeMesh(p) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshLambertMaterial({ color: COLORS[p.color % COLORS.length] });
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.2, 4, 10), mat);
+      body.position.y = -0.33;
+      const head = new THREE.Group();
+      head.add(new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), mat));
+      const gun = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.3), new THREE.MeshBasicMaterial({ color: 0x222222 }));
+      gun.position.set(0.12, -0.1, -0.2);
+      head.add(gun);
+      const c = document.createElement('canvas'); c.width = 256; c.height = 64;
+      const x = c.getContext('2d');
+      x.font = 'bold 36px Arial'; x.textAlign = 'center'; x.lineWidth = 6; x.strokeStyle = '#000'; x.fillStyle = '#fff';
+      x.strokeText(p.name, 128, 44); x.fillText(p.name, 128, 44);
+      const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, fog: false }));
+      tag.scale.set(0.8, 0.2, 1); tag.position.y = 0.3; tag.renderOrder = 10;
+      g.add(body, head, tag);
+      g.userData.head = head; g.visible = false;
+      scene.add(g);
+      return g;
+    }
+
+    function addPlayer(id, name, color, o = {}) {
+      if (net.players[id]) return net.players[id];
+      const p = { id, name, color, kills: o.kills || 0, deaths: o.deaths || 0, hp: o.hp ?? 100, alive: o.alive ?? true,
+        pos: new THREE.Vector3().fromArray(o.pos || [0, -999, 0]), yaw: 0, pitch: 0, invuln: 0, lastShot: 0, diedAt: 0, seen: false };
+      if (id !== net.id) p.mesh = makeMesh(p);
+      net.players[id] = p;
+      renderBoards();
+      return p;
+    }
+
+    function removePlayer(id) {
+      const p = net.players[id];
+      if (!p) return;
+      if (p.mesh) scene.remove(p.mesh);
+      delete net.players[id];
+      renderBoards();
+    }
+
+    function renderBoards() {
+      const rows = Object.values(net.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
+      const h = rows.map((p) => `<div class="row2"><span><span style="color:#${COLORS[p.color % COLORS.length].toString(16).padStart(6, '0')}">●</span> ${esc(p.name)}${p.id === net.id ? ' (you)' : ''}</span><b>${p.kills} / ${p.deaths}</b></div>`).join('');
+      $('plist').innerHTML = h;
+      $('score').innerHTML = '<div class="row2"><i>Player</i><b>Kills / Deaths</b></div>' + h;
+    }
+
+    // ---- sending -------------------------------------------------------
+    const safeSend = (c, m) => { try { if (c.open) c.send(m); } catch (e) { /* ignore */ } };
+    function bcast(m, except) {   // host: to all clients, and to itself
+      for (const c of net.conns) if (c.pid && c !== except) safeSend(c, m);
+      onClientMsg(m);
+    }
+    const sendHost = (m) => (net.isHost ? onHostMsg(m, null) : safeSend(net.hostConn, m));
+
+    // ---- host logic ----------------------------------------------------
+    function hostHit(vid, kid) {
+      const v = net.players[vid], k = net.players[kid], now = performance.now();
+      if (!v || !k || !v.alive || vid === kid || now < v.invuln) return;
+      v.hp -= DMG;
+      if (v.hp <= 0) {
+        v.hp = 0; v.alive = false; v.deaths++; k.kills++; v.diedAt = now;
+        bcast({ t: 'kill', k: kid, v: vid });
+        bcast({ t: 'pl', p: pub(k) });
+      }
+      bcast({ t: 'pl', p: pub(v) });
+    }
+
+    function onHostMsg(m, c) {
+      try {
+        const pid = c ? c.pid : '0', p = net.players[pid], now = performance.now();
+        if (m.t === 'hello') {
+          if (Object.keys(net.players).length >= MAX_PLAYERS) { safeSend(c, { t: 'full' }); setTimeout(() => c.close(), 300); return; }
+          c.pid = String(net.nextId++);
+          const used = Object.values(net.players).map((q) => q.color);
+          let col = 0; while (used.includes(col)) col++;
+          const np = addPlayer(c.pid, String(m.name || 'Player').slice(0, 12), col);
+          safeSend(c, { t: 'welcome', id: c.pid, players: Object.values(net.players).map(pub) });
+          bcast({ t: 'join', p: pub(np) }, c);
+        } else if (!p) {
+          return;
+        } else if (m.t === 's') {
+          p.pos.fromArray(m.p); p.yaw = +m.y || 0; p.pitch = +m.a || 0;
+        } else if (m.t === 'shot') {
+          if (!p.alive || now - p.lastShot < 120) return;
+          p.lastShot = now;
+          bcast({ t: 'tr', s: pid, o: m.o, e: m.e });
+          if (m.h) hostHit(String(m.h), pid);
+        } else if (m.t === 'resp') {
+          if (!p.alive && now - p.diedAt > RESPAWN_MS - 500) {
+            p.hp = 100; p.alive = true; p.invuln = now + 2000;
+            bcast({ t: 'pl', p: pub(p) });
+          }
+        }
+      } catch (e) { console.warn('bad message', e); }
+    }
+
+    function dropConn(c) {
+      net.conns = net.conns.filter((x) => x !== c);
+      if (c.pid && net.players[c.pid]) bcast({ t: 'leave', id: c.pid });
+    }
+
+    // ---- client logic (also runs on the host) ----------------------------
+    function onClientMsg(m) {
+      try {
+        switch (m.t) {
+          case 'welcome':
+            net.id = m.id; net.players = {};
+            m.players.forEach((q) => addPlayer(q.id, q.name, q.color, q));
+            clearTimeout(net.timer);
+            enterRoom();
+            break;
+          case 'full': leave('Room is full'); break;
+          case 'join': addPlayer(m.p.id, m.p.name, m.p.color, m.p); break;
+          case 'leave': removePlayer(m.id); break;
+          case 'snap':
+            if (net.isHost) break;
+            for (const id in m.d) {
+              const p = net.players[id], a = m.d[id];
+              if (!p || id === net.id) continue;
+              p.pos.set(a[0], a[1], a[2]); p.yaw = a[3]; p.pitch = a[4];
+            }
+            break;
+          case 'tr': if (m.s !== net.id) tracer(m.o, m.e); break;
+          case 'kill': {
+            const k = net.players[m.k], v = net.players[m.v];
+            if (!k || !v) break;
+            const d = document.createElement('div');
+            d.innerHTML = `${esc(k.name)} ➜ ${esc(v.name)}`;
+            $('feed').appendChild(d);
+            setTimeout(() => d.remove(), 5000);
+            if (m.v === net.id) $('deadBy').textContent = 'by ' + k.name;
+            break;
+          }
+          case 'pl': {
+            const q = m.p, p = net.players[q.id];
+            if (!p) break;
+            const wasAlive = p.alive, oldHp = p.hp;
+            Object.assign(p, { hp: q.hp, alive: q.alive, kills: q.kills, deaths: q.deaths });
+            if (q.id === net.id) {
+              $('hpBar').style.width = q.hp + '%';
+              $('hpBar').style.background = q.hp > 50 ? '#4c4' : q.hp > 25 ? '#ec4' : '#e44';
+              if (q.hp < oldHp) pulse('flash', 80);
+              if (wasAlive && !q.alive) die();
+            }
+            renderBoards();
+            break;
+          }
+        }
+      } catch (e) { console.warn('bad message', e); }
+    }
+
+    function die() {
+      isDead = true;
+      moveForward = moveBackward = moveLeft = moveRight = spacePressed = false;
+      $('dead').style.display = 'flex';
+      setTimeout(respawnLocal, RESPAWN_MS);
+    }
+
+    function respawnLocal() {
+      if (!net.on) return;
+      camera.position.copy(pickSpawn());
+      velocity.set(0, 0, 0);
+      isDead = false;
+      $('dead').style.display = 'none';
+      sendHost({ t: 'resp' });
+    }
+
+    // ---- shooting ----------------------------------------------------
+    function rayCyl(o, d, c, r, y0, y1) {   // ray vs vertical cylinder (side only) -> distance or -1
+      const ox = o.x - c.x, oz = o.z - c.z, a = d.x * d.x + d.z * d.z;
+      if (a < 1e-9) return -1;
+      const b = ox * d.x + oz * d.z, disc = b * b - a * (ox * ox + oz * oz - r * r);
+      if (disc < 0) return -1;
+      const s = Math.sqrt(disc);
+      for (const t of [(-b - s) / a, (-b + s) / a]) {
+        if (t < 0) continue;
+        const y = o.y + d.y * t - c.y;
+        if (y >= y0 && y <= y1) return t;
+      }
+      return -1;
+    }
+
+    function tracer(a, b) {
+      const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3().fromArray(a), new THREE.Vector3().fromArray(b)]);
+      const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xffee88, transparent: true, fog: false }));
+      l.frustumCulled = false;
+      scene.add(l);
+      tracers.push({ l, t: 0 });
+    }
+
+    function shoot() {
+      const now = performance.now();
+      if (!net.on || isDead || now - net.lastShot < FIRE_GAP) return;
+      net.lastShot = now;
+      camera.getWorldDirection(_camDir);
+      const o = camera.position;
+      rayShot.set(o, _camDir);
+      rayShot.far = RANGE;
+      const wall = rayShot.intersectObjects(solidTargets, false)[0];
+      let maxD = wall ? wall.distance : RANGE, hit = null;
+      for (const p of Object.values(net.players)) {
+        if (p.id === net.id || !p.alive || !p.seen) continue;
+        const d = rayCyl(o, _camDir, p.pos, 0.22, -0.6, 0.13);
+        if (d >= 0 && d < maxD) { maxD = d; hit = p.id; }
+      }
+      const e = o.clone().addScaledVector(_camDir, maxD);
+      const s = o.clone().addScaledVector(_camDir, 0.3); s.y -= 0.08;
+      tracer(s.toArray(), e.toArray());
+      if (hit) pulse('hitm', 120);
+      sendHost({ t: 'shot', o: o.toArray(), e: e.toArray(), h: hit });
+    }
+
+    document.addEventListener('mousedown', (e) => { if (e.button === 0) { firing = true; if (controls.isLocked) shoot(); } });
+    document.addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; });
+
+    // ---- per-frame ---------------------------------------------------
+    function netTick(now, dt) {
+      const me = net.players[net.id];
+      _eul.setFromQuaternion(camera.quaternion, 'YXZ');
+      if (me) { me.pos.copy(camera.position); me.yaw = _eul.y; me.pitch = _eul.x; }
+      if (firing && controls.isLocked) shoot();
+
+      if (now - net.lastSend > 33) {
+        net.lastSend = now;
+        if (net.isHost) {
+          const d = {};
+          for (const id in net.players) { const p = net.players[id]; d[id] = [p.pos.x, p.pos.y, p.pos.z, p.yaw, p.pitch]; }
+          bcast({ t: 'snap', d });
+        } else {
+          safeSend(net.hostConn, { t: 's', p: camera.position.toArray(), y: _eul.y, a: _eul.x });
+        }
+      }
+
+      const k = 1 - Math.exp(-18 * dt);
+      for (const id in net.players) {
+        const p = net.players[id], m = p.mesh;
+        if (!m) continue;
+        if (!p.seen && p.pos.y > -900) { p.seen = true; m.position.copy(p.pos); m.rotation.y = p.yaw; }
+        m.visible = p.seen && p.alive;
+        m.position.lerp(p.pos, k);
+        let dy = p.yaw - m.rotation.y;
+        dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+        m.rotation.y += dy * k;
+        m.userData.head.rotation.x = p.pitch;
+      }
+
+      for (let i = tracers.length - 1; i >= 0; i--) {
+        const t = tracers[i];
+        t.t += dt;
+        t.l.material.opacity = 1 - t.t / 0.12;
+        if (t.t >= 0.12) { scene.remove(t.l); t.l.geometry.dispose(); t.l.material.dispose(); tracers.splice(i, 1); }
+      }
+    }
+
+    // ---- room lifecycle / menu ------------------------------------------
+    function enterRoom() {
+      net.on = true;
+      $('mpHome').style.display = 'none'; startBtn.style.display = 'none';
+      $('mpRoom').style.display = 'flex';
+      $('roomCode').textContent = net.code || $('codeInput').value.toUpperCase();
+      $('roomTag').textContent = 'ROOM ' + $('roomCode').textContent;
+      $('hud').style.display = 'block';
+      $('hpBar').style.width = '100%';
+      setMp('');
+      camera.position.copy(pickSpawn());
+      velocity.set(0, 0, 0);
+      needsRender = true;
+    }
+
+    function leave(msg) {
+      clearTimeout(net.timer);
+      if (net.peer) { try { net.peer.destroy(); } catch (e) { /* ignore */ } }
+      for (const id in net.players) if (net.players[id].mesh) scene.remove(net.players[id].mesh);
+      Object.assign(net, { on: false, peer: null, conns: [], hostConn: null, isHost: false, players: {}, nextId: 1, code: '' });
+      isDead = false; firing = false;
+      $('dead').style.display = 'none'; $('hud').style.display = 'none'; $('feed').innerHTML = '';
+      $('mpRoom').style.display = 'none'; $('mpHome').style.display = 'flex'; startBtn.style.display = '';
+      setMp(msg);
+      if (controls.isLocked) controls.unlock();
+      if (loadedModel) placePlayer();
+      needsRender = true;
+    }
+
+    function startHost() {
+      setMp('Creating room…');
+      const code = genCode(), peer = new Peer(ID_PREFIX + code);
+      net.peer = peer;
+      peer.on('open', () => {
+        Object.assign(net, { isHost: true, code, id: '0', players: {}, nextId: 1 });
+        addPlayer('0', myName(), 0);
+        enterRoom();
+      });
+      peer.on('connection', (c) => {
+        net.conns.push(c);
+        c.on('data', (m) => onHostMsg(m, c));
+        c.on('close', () => dropConn(c));
+        c.on('error', () => dropConn(c));
+      });
+      peer.on('error', (e) => {
+        if (e.type === 'unavailable-id') { peer.destroy(); startHost(); }   // code collision: roll a new one
+        else leave('Matchmaking error: ' + e.type);
+      });
+    }
+
+    function startJoin(code) {
+      setMp('Connecting…');
+      const peer = new Peer();
+      net.peer = peer; net.code = code;
+      net.timer = setTimeout(() => leave('Could not connect (wrong code, or a firewall is blocking it)'), 12000);
+      peer.on('open', () => {
+        const c = peer.connect(ID_PREFIX + code, { reliable: true });
+        net.hostConn = c;
+        c.on('open', () => c.send({ t: 'hello', name: myName() }));
+        c.on('data', onClientMsg);
+        c.on('close', () => { if (net.on) leave('The host left the game'); });
+      });
+      peer.on('error', (e) => leave(e.type === 'peer-unavailable' ? 'Room not found' : 'Connection error: ' + e.type));
+    }
+
+    hostBtn.addEventListener('click', startHost);
+    joinBtn.addEventListener('click', () => {
+      const code = $('codeInput').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (code.length !== 5) return setMp('Enter the 5-character join code');
+      startJoin(code);
+    });
+    resumeBtn.addEventListener('click', () => controls.lock());
+    $('leaveBtn').addEventListener('click', () => leave(''));
+    $('roomCode').addEventListener('click', () => { if (navigator.clipboard) navigator.clipboard.writeText($('roomCode').textContent); });
+
+    let prevTime = performance.now();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const time = performance.now();
+      const rawDelta = (time - prevTime) / 1000;
+      prevTime = time;
+
+      if (controls.isLocked || net.on) {
+        update(Math.min(rawDelta, 0.1));
+        adaptResolution(rawDelta, time);
+        updateFps(time);
+        if (net.on) netTick(time, Math.min(rawDelta, 0.1));
+        renderer.render(scene, camera);
+      } else if (needsRender) {
+        // menu is open: draw the backdrop once (and again on resize/model load), not 60x per second
+        renderer.render(scene, camera);
+        needsRender = false;
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      needsRender = true;
+    });
+
+    animate();
+  </script>
+</body>
+</html>
