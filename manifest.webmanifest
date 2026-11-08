@@ -1,0 +1,26 @@
+{
+  "name": "Toolkit — Focus, Calc, Convert, Notes",
+  "short_name": "Toolkit",
+  "description": "An offline productivity toolkit: focus timer, calculator, unit converter and scratchpad.",
+  "id": "/",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#0f1419",
+  "theme_color": "#0f1419",
+  "categories": ["productivity", "utilities"],
+  "launch_handler": { "client_mode": "focus-existing" },
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Focus timer", "url": "./?tool=focus", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Calculator", "url": "./?tool=calc", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Converter", "url": "./?tool=convert", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Scratchpad", "url": "./?tool=notes", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

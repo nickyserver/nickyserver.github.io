@@ -1,552 +1,123 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Minecraft Education Join Info</title>
-  <style>
-    /* Reset & Deep Dark Theme */
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-
-    body {
-      background-color: #090d16;
-      background: radial-gradient(circle at center, #111827 0%, #030712 100%);
-      color: #f3f4f6;
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
-    }
-
-    /* Main Card */
-    .card {
-      background-color: #0f172a;
-      border: 1px solid #1e293b;
-      border-radius: 20px;
-      padding: 44px 36px;
-      max-width: 500px;
-      width: 100%;
-      text-align: center;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-      position: relative;
-    }
-
-    .title {
-      font-size: 1.8rem;
-      font-weight: 700;
-      margin-bottom: 6px;
-      color: #f8fafc;
-      letter-spacing: -0.5px;
-    }
-
-    .subtitle {
-      font-size: 0.9rem;
-      color: #64748b;
-      margin-bottom: 28px;
-    }
-
-    /* Status Indicator */
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 5px 12px;
-      border-radius: 20px;
-      margin-bottom: 20px;
-      background-color: #1e293b;
-      color: #94a3b8;
-      border: 1px solid #334155;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .status-badge.online {
-      background-color: rgba(6, 78, 59, 0.5);
-      color: #34d399;
-      border-color: rgba(16, 185, 129, 0.3);
-    }
-
-    .status-badge.offline {
-      background-color: rgba(127, 29, 29, 0.5);
-      color: #f87171;
-      border-color: rgba(239, 68, 68, 0.3);
-    }
-
-    .status-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background-color: currentColor;
-    }
-
-    /* Join Code Display Section */
-    .code-section {
-      background-color: #020617;
-      border: 1px solid #1e293b;
-      border-radius: 14px;
-      padding: 24px 16px;
-      margin-bottom: 24px;
-      position: relative;
-      transition: all 0.3s ease;
-    }
-
-    .code-label {
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 1.2px;
-      color: #64748b;
-      margin-bottom: 16px;
-      font-weight: 600;
-    }
-
-    .join-code {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    /* Word Box Styling */
-    .code-box {
-      background-color: #0f172a;
-      border: 1px solid #1e293b;
-      min-width: 85px;
-      flex: 1;
-      height: 60px;
-      padding: 0 8px;
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: #38bdf8;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
-      transition: all 0.3s ease;
-      text-align: center;
-      word-break: break-word;
-    }
-
-    /* Offline State Styling */
-    .card.is-offline .code-section {
-      border-color: rgba(239, 68, 68, 0.2);
-      background-color: rgba(15, 23, 42, 0.6);
-    }
-
-    .card.is-offline .code-box {
-      opacity: 0.2;
-      color: #64748b;
-    }
-
-    .offline-overlay {
-      display: none;
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(2, 6, 23, 0.85);
-      border-radius: 14px;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      gap: 6px;
-      backdrop-filter: blur(2px);
-    }
-
-    .card.is-offline .offline-overlay {
-      display: flex;
-    }
-
-    .offline-title {
-      color: #ef4444;
-      font-weight: 700;
-      font-size: 1.1rem;
-      letter-spacing: 1px;
-    }
-
-    .offline-sub {
-      color: #64748b;
-      font-size: 0.8rem;
-    }
-
-    /* Action Buttons */
-    .btn {
-      display: inline-block;
-      width: 100%;
-      padding: 15px 20px;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 0.95rem;
-      text-decoration: none;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      border: none;
-      text-align: center;
-    }
-
-    .btn-primary {
-      background-color: #10b981;
-      color: #022c22;
-    }
-
-    .btn-primary:hover {
-      background-color: #059669;
-    }
-
-    .card.is-offline .btn-primary {
-      background-color: #1e293b;
-      color: #64748b;
-      pointer-events: none;
-      cursor: not-allowed;
-    }
-
-    /* Secret Modal (F10 Menu) */
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.85);
-      display: none;
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
-      backdrop-filter: blur(8px);
-    }
-
-    .modal-overlay.active {
-      display: flex;
-    }
-
-    .modal-content {
-      background-color: #0f172a;
-      border: 1px solid #334155;
-      border-radius: 16px;
-      padding: 28px;
-      width: 90%;
-      max-width: 440px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.9);
-    }
-
-    .modal-title {
-      font-size: 1.2rem;
-      color: #f8fafc;
-      margin-bottom: 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      text-align: left;
-      margin-bottom: 16px;
-    }
-
-    .form-group label {
-      font-size: 0.8rem;
-      color: #94a3b8;
-    }
-
-    .form-group input, .form-group select {
-      padding: 10px 12px;
-      background-color: #020617;
-      color: #ffffff;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      font-size: 0.95rem;
-    }
-
-    .toggle-group {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background-color: #020617;
-      border: 1px solid #334155;
-      padding: 12px 14px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-    }
-
-    .toggle-group span {
-      font-size: 0.9rem;
-      color: #f8fafc;
-      font-weight: 500;
-    }
-
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 44px;
-      height: 24px;
-    }
-
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-color: #334155;
-      transition: .3s;
-      border-radius: 24px;
-    }
-
-    .slider:before {
-      position: absolute;
-      content: "";
-      height: 18px;
-      width: 18px;
-      left: 3px;
-      bottom: 3px;
-      background-color: white;
-      transition: .3s;
-      border-radius: 50%;
-    }
-
-    input:checked + .slider {
-      background-color: #ef4444;
-    }
-
-    input:checked + .slider:before {
-      transform: translateX(20px);
-    }
-
-    .select-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Toolkit</title>
+  <meta name="theme-color" content="#0f1419">
+  <meta name="description" content="Offline productivity toolkit: focus timer, calculator, unit converter, scratchpad.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
-  <div class="card" id="mainCard">
-    <div id="statusBadge" class="status-badge">
-      <span class="status-dot"></span>
-      <span id="statusText">Connecting...</span>
+  <header class="titlebar" id="titlebar">
+    <div class="brand"><span class="logo" aria-hidden="true"></span><strong>Toolkit</strong></div>
+    <nav class="tabs" role="tablist" aria-label="Tools">
+      <button role="tab" data-tool="focus"   aria-selected="true"  id="tab-focus">Focus <kbd>1</kbd></button>
+      <button role="tab" data-tool="calc"    aria-selected="false" id="tab-calc">Calculator <kbd>2</kbd></button>
+      <button role="tab" data-tool="convert" aria-selected="false" id="tab-convert">Converter <kbd>3</kbd></button>
+      <button role="tab" data-tool="notes"   aria-selected="false" id="tab-notes">Scratchpad <kbd>4</kbd></button>
+    </nav>
+    <div class="actions">
+      <button id="install" class="btn ghost" hidden>Install app</button>
+      <button id="theme" class="btn ghost" title="Toggle theme" aria-label="Toggle theme">◐</button>
     </div>
-    <h1 class="title">Join Our World</h1>
-    <p class="subtitle">Minecraft Education Edition</p>
+  </header>
 
-    <!-- Join Code Display -->
-    <div class="code-section">
-      <div class="code-label">Join Code</div>
-      <div class="join-code">
-        <div class="code-box" id="word1">LOADING</div>
-        <div class="code-box" id="word2">LOADING</div>
-        <div class="code-box" id="word3">LOADING</div>
-        <div class="code-box" id="word4">LOADING</div>
+  <main>
+    <!-- FOCUS -->
+    <section id="panel-focus" class="panel" role="tabpanel" aria-labelledby="tab-focus">
+      <div class="card timer-card">
+        <div class="modes" role="group" aria-label="Timer mode">
+          <button class="chip active" data-mode="work">Focus</button>
+          <button class="chip" data-mode="short">Short break</button>
+          <button class="chip" data-mode="long">Long break</button>
+        </div>
+        <div class="ring-wrap">
+          <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="ring-bg" cx="60" cy="60" r="54"/>
+            <circle class="ring-fg" id="ring-fg" cx="60" cy="60" r="54"/>
+          </svg>
+          <div class="time" id="time" role="timer" aria-live="off">25:00</div>
+        </div>
+        <div class="controls">
+          <button class="btn primary big" id="start">Start <kbd>Space</kbd></button>
+          <button class="btn" id="reset">Reset <kbd>R</kbd></button>
+          <button class="btn" id="skip">Skip <kbd>N</kbd></button>
+        </div>
+        <p class="muted" id="session-label">Session 1 of 4 · Keeps screen awake while running</p>
       </div>
-
-      <!-- Offline Overlay Notice -->
-      <div class="offline-overlay">
-        <div class="offline-title">SERVER OFFLINE</div>
-        <div class="offline-sub">Check back later for host availability</div>
+      <div class="card">
+        <h2>Settings</h2>
+        <div class="grid3">
+          <label>Focus (min)<input type="number" id="set-work" min="1" max="180" value="25"></label>
+          <label>Short break<input type="number" id="set-short" min="1" max="60" value="5"></label>
+          <label>Long break<input type="number" id="set-long" min="1" max="90" value="15"></label>
+        </div>
+        <label class="check"><input type="checkbox" id="set-notify"> Notify me when a session ends</label>
+        <label class="check"><input type="checkbox" id="set-sound" checked> Play a soft chime</label>
+        <h2>Today</h2>
+        <p class="stat"><span id="stat-today">0</span> sessions · <span id="stat-min">0</span> focused minutes</p>
       </div>
-    </div>
+    </section>
 
-    <!-- Dynamic Link -->
-    <a id="worldLink" href="#" target="_blank" class="btn btn-primary">
-      Open World Resources
-    </a>
-  </div>
-
-  <!-- F10 Hidden Menu Modal -->
-  <div class="modal-overlay" id="editorModal">
-    <div class="modal-content">
-      <div class="modal-title">
-        <span>Server Admin Panel</span>
-        <span style="font-size: 0.75rem; color: #64748b;">(Esc to close)</span>
+    <!-- CALCULATOR -->
+    <section id="panel-calc" class="panel" role="tabpanel" aria-labelledby="tab-calc" hidden>
+      <div class="card calc-card">
+        <input id="calc-input" class="calc-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+               placeholder="Type an expression, e.g. (12.5 + 7) * 3 / 2^2" aria-label="Expression">
+        <div class="calc-result" id="calc-result" aria-live="polite">0</div>
+        <div class="keys" id="keys"></div>
       </div>
-
-      <!-- Server Status Toggle -->
-      <div class="toggle-group">
-        <span>Server Offline Mode</span>
-        <label class="switch">
-          <input type="checkbox" id="offlineToggle">
-          <span class="slider"></span>
-        </label>
+      <div class="card">
+        <div class="row-between"><h2>History</h2><button class="btn ghost small" id="calc-clear-hist">Clear</button></div>
+        <ul class="history" id="calc-history"></ul>
+        <p class="muted">Supports + − × ÷ ^ % ( ), sqrt(), sin/cos/tan (degrees), ln, log, abs, pi, e, and <code>ans</code>.</p>
       </div>
+    </section>
 
-      <!-- Link Input -->
-      <div class="form-group">
-        <label for="linkInput">Resource / World Link URL</label>
-        <input type="url" id="linkInput" placeholder="https://example.com" />
+    <!-- CONVERTER -->
+    <section id="panel-convert" class="panel" role="tabpanel" aria-labelledby="tab-convert" hidden>
+      <div class="card">
+        <div class="modes" id="conv-cats" role="group" aria-label="Category"></div>
+        <div class="conv-grid">
+          <div>
+            <label for="conv-from-val">From</label>
+            <input id="conv-from-val" type="number" inputmode="decimal" value="1" step="any">
+            <select id="conv-from-unit" aria-label="From unit"></select>
+          </div>
+          <button class="btn swap" id="conv-swap" title="Swap units" aria-label="Swap units">⇄</button>
+          <div>
+            <label for="conv-to-val">To</label>
+            <input id="conv-to-val" type="number" inputmode="decimal" step="any">
+            <select id="conv-to-unit" aria-label="To unit"></select>
+          </div>
+        </div>
+        <p class="muted" id="conv-note"></p>
       </div>
+    </section>
 
-      <!-- Word Selectors -->
-      <label style="font-size: 0.8rem; color: #94a3b8; display: block; text-align: left; margin-bottom: 8px;">
-        Minecraft Join Code Words
-      </label>
-      <div class="select-grid">
-        <div class="form-group"><select id="slot1"></select></div>
-        <div class="form-group"><select id="slot2"></select></div>
-        <div class="form-group"><select id="slot3"></select></div>
-        <div class="form-group"><select id="slot4"></select></div>
+    <!-- SCRATCHPAD -->
+    <section id="panel-notes" class="panel" role="tabpanel" aria-labelledby="tab-notes" hidden>
+      <div class="card notes-card">
+        <div class="row-between">
+          <h2>Scratchpad</h2>
+          <div class="row-gap">
+            <span class="muted" id="notes-status">Saved</span>
+            <button class="btn small" id="notes-open">Open file</button>
+            <button class="btn small" id="notes-save">Save as file</button>
+            <button class="btn small ghost" id="notes-clear">Clear</button>
+          </div>
+        </div>
+        <textarea id="notes" spellcheck="true" placeholder="Jot anything down. It autosaves on this device and works offline."></textarea>
+        <p class="muted"><span id="notes-count">0 words</span> · Autosaved locally · Ctrl+S saves a file</p>
       </div>
+    </section>
+  </main>
 
-      <button class="btn btn-primary" id="saveBtn">Save & Sync</button>
-    </div>
-  </div>
-
-  <!-- Firebase SDK (v10) -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyDwDe910zdnwDi8Cns-AFkCMZbxXzddJuA",
-      authDomain: "server-bc966.firebaseapp.com",
-      databaseURL: "https://server-bc966-default-rtdb.firebaseio.com",
-      projectId: "server-bc966",
-      storageBucket: "server-bc966.firebasestorage.app",
-      messagingSenderId: "658451047484",
-      appId: "1:658451047484:web:38d3fa3cd5b969b9d6cf39"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const dbRef = ref(db, 'minecraft/joinInfo');
-
-    // Official Minecraft Education Join Code Words
-    const mcWords = [
-      "Apple", "Pickaxe", "Book", "Map", "Cookie", "Cake",
-      "Water Bucket", "Pufferfish", "Steve", "Alex", "Creeper",
-      "Panda", "Llama", "Potion", "Compass", "Sign", "TNT",
-      "Hopper", "Rail", "Carrot", "Fish", "Bucket", "Chest"
-    ];
-
-    let currentCode = ["Apple", "Pickaxe", "Book", "Map"];
-    let currentLink = "https://education.minecraft.net/";
-    let isOffline = false;
-
-    // Populate dropdown options with words
-    for (let i = 1; i <= 4; i++) {
-      const select = document.getElementById(`slot${i}`);
-      mcWords.forEach(word => {
-        const option = document.createElement('option');
-        option.value = word;
-        option.textContent = word;
-        select.appendChild(option);
-      });
-    }
-
-    // Real-Time Database Sync
-    onValue(dbRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        if (data.joinCode) currentCode = data.joinCode;
-        if (data.websiteLink) currentLink = data.websiteLink;
-        isOffline = !!data.isOffline;
-      } else {
-        set(dbRef, { joinCode: currentCode, websiteLink: currentLink, isOffline: false });
-      }
-      updateUI();
-    }, (error) => {
-      console.error("Realtime DB error:", error);
-      const statusBadge = document.getElementById('statusBadge');
-      statusBadge.className = "status-badge offline";
-      document.getElementById('statusText').textContent = "Connection Error";
-    });
-
-    // Update Interface
-    function updateUI() {
-      const card = document.getElementById('mainCard');
-      const statusBadge = document.getElementById('statusBadge');
-      const statusText = document.getElementById('statusText');
-      const linkBtn = document.getElementById('worldLink');
-
-      // Update Word Boxes & Inputs
-      for (let i = 0; i < 4; i++) {
-        document.getElementById(`word${i + 1}`).textContent = currentCode[i] || "";
-        document.getElementById(`slot${i + 1}`).value = currentCode[i] || mcWords[0];
-      }
-      linkBtn.href = currentLink;
-      document.getElementById('linkInput').value = currentLink;
-      document.getElementById('offlineToggle').checked = isOffline;
-
-      // Handle Offline State
-      if (isOffline) {
-        card.classList.add('is-offline');
-        statusBadge.className = "status-badge offline";
-        statusText.textContent = "Server Offline";
-        linkBtn.textContent = "Server Offline";
-      } else {
-        card.classList.remove('is-offline');
-        statusBadge.className = "status-badge online";
-        statusText.textContent = "Server Online";
-        linkBtn.textContent = "Open World Resources";
-      }
-    }
-
-    // Save Changes to Database
-    async function saveToFirebase() {
-      const newCode = [
-        document.getElementById('slot1').value,
-        document.getElementById('slot2').value,
-        document.getElementById('slot3').value,
-        document.getElementById('slot4').value
-      ];
-      const newLink = document.getElementById('linkInput').value;
-      const newOfflineState = document.getElementById('offlineToggle').checked;
-
-      try {
-        await set(dbRef, {
-          joinCode: newCode,
-          websiteLink: newLink,
-          isOffline: newOfflineState
-        });
-        toggleModal(false);
-      } catch (err) {
-        alert("Failed to save changes: " + err.message);
-      }
-    }
-
-    // Modal Control
-    function toggleModal(show = null) {
-      const modal = document.getElementById('editorModal');
-      if (show === null) {
-        modal.classList.toggle('active');
-      } else if (show) {
-        modal.classList.add('active');
-      } else {
-        modal.classList.remove('active');
-      }
-    }
-
-    document.getElementById('saveBtn').addEventListener('click', saveToFirebase);
-
-    // Keyboard Shortcuts (F10 to open hidden admin panel)
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'F10') {
-        e.preventDefault();
-        toggleModal();
-      }
-      if (e.key === 'Escape') {
-        toggleModal(false);
-      }
-    });
-  </script>
-
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="app.js"></script>
 </body>
 </html>
