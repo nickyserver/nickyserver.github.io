@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loading..</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root {
+    --desk: #c9ced6; --frame: #dfe3e8; --tab: #f7f8fa; --tab-idle: #cfd4db;
+    --bar: #f7f8fa; --page: #ffffff; --text: #1c1e21; --muted: #6b7280;
+    --accent: #3b6cf6; --border: #c3c8d0; --field: #eceef2; --ok: #16a34a; --err: #dc2626;
+    --card: #f4f6f9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --desk: #0e1013; --frame: #1b1e23; --tab: #2a2e35; --tab-idle: #1b1e23;
+      --bar: #2a2e35; --page: #1e2127; --text: #e8eaed; --muted: #9aa0a6;
+      --border: #3a3f47; --field: #1b1e23; --card: #262a31;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--desk); color: var(--text); padding: 16px;
+    font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  .window {
+    max-width: 960px; height: calc(100vh - 32px); margin: 0 auto; display: flex; flex-direction: column;
+    background: var(--frame); border-radius: 12px; overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,.25); border: 1px solid var(--border);
+  }
+
+  /* Title bar + tabs */
+  .titlebar { display: flex; align-items: flex-end; padding: 8px 12px 0; gap: 12px; }
+  .lights { display: flex; gap: 7px; padding-bottom: 12px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+  .tabs { display: flex; gap: 2px; flex: 1; min-width: 0; }
+  .tab {
+    display: flex; align-items: center; gap: 8px; padding: 8px 16px; min-width: 0; max-width: 210px;
+    background: var(--tab-idle); color: var(--muted); border: 0; border-radius: 10px 10px 0 0;
+    font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap;
+  }
+  .tab.active { background: var(--tab); color: var(--text); }
+  .badge {
+    background: var(--accent); color: #fff; border-radius: 10px; font-size: 11px;
+    padding: 0 7px; line-height: 18px; display: none;
+  }
+  .badge.show { display: inline-block; }
+
+  /* Toolbar */
+  .toolbar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: var(--bar); border-bottom: 1px solid var(--border); }
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: 50%; border: 0; background: transparent; color: var(--text);
+    font-size: 16px; cursor: pointer; flex: none;
+  }
+  .icon-btn:hover:not(:disabled) { background: var(--field); }
+  .icon-btn:disabled { opacity: .35; cursor: default; }
+  .address {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; background: var(--field);
+    border-radius: 18px; padding: 0 14px; height: 34px; border: 1px solid transparent;
+  }
+  .address:focus-within { border-color: var(--accent); }
+  .address .lock { font-size: 13px; flex: none; }
+  .address input {
+    flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit;
+  }
+  .chip {
+    flex: none; font-size: 12px; color: var(--muted); background: var(--field); border-radius: 14px;
+    padding: 4px 10px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .loadbar { height: 3px; background: transparent; position: relative; overflow: hidden; flex: none; }
+  .loadbar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--accent); transition: width .15s; }
+  .loadbar.indeterminate i { width: 30%; animation: slide 1s infinite ease-in-out; }
+  @keyframes slide { from { left: -30%; } to { left: 100%; } }
+
+  /* Page */
+  .page { flex: 1; overflow: auto; background: var(--page); padding: 24px; position: relative; }
+  .view { display: none; max-width: 640px; margin: 0 auto; }
+  .view.active { display: block; }
+
+  /* Tabs that render received HTML files */
+  .tab .tlabel { overflow: hidden; text-overflow: ellipsis; }
+  .tab .x { flex: none; width: 18px; height: 18px; line-height: 18px; text-align: center; border-radius: 50%; font-size: 11px; }
+  .tab .x:hover { background: var(--field); }
+  .view.webview { position: absolute; inset: 0; max-width: none; margin: 0; }
+  .view.webview.active { display: flex; flex-direction: column; }
+  .webview .warn {
+    flex: none; font-size: 12px; padding: 6px 14px; color: var(--muted); background: var(--bar);
+    border-bottom: 1px solid var(--border);
+  }
+  .webview iframe { flex: 1; width: 100%; border: 0; background: #fff; }
+  h1 { margin: 0 0 4px; font-size: 1.5rem; }
+  h2 { margin: 24px 0 8px; font-size: 1rem; }
+  .sub { color: var(--muted); margin: 0 0 16px; }
+  .drop {
+    border: 2px dashed var(--border); border-radius: 12px; padding: 40px 12px; text-align: center;
+    color: var(--muted); cursor: pointer; transition: .15s;
+  }
+  .drop.over { border-color: var(--accent); background: rgba(59,108,246,.08); color: var(--text); }
+  .drop.disabled { opacity: .5; pointer-events: none; }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  li { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .name { font-weight: 600; word-break: break-all; }
+  .meta { font-size: .85rem; color: var(--muted); }
+  progress { width: 100%; height: 8px; margin-top: 6px; }
+  a.dl { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .empty { color: var(--muted); font-size: .9rem; background: none; border: 0; padding: 0; }
+  .note { font-size: .85rem; color: var(--muted); margin-top: 12px; }
+  .linkrow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .linkrow input {
+    flex: 1; min-width: 180px; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--field); color: var(--text); font: inherit; font-size: 14px;
+  }
+  .linkrow input:focus { outline: 0; border-color: var(--accent); }
+  .linkrow button {
+    padding: 8px 14px; border: 0; border-radius: 8px; background: var(--accent); color: #fff;
+    font: inherit; cursor: pointer;
+  }
+  .linkrow button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .linkrow button:disabled { opacity: .5; cursor: default; }
+  .how { color: var(--muted); padding-left: 20px; }
+  .how li { background: none; border: 0; padding: 2px 0; display: list-item; list-style: decimal; }
+
+  /* Status bar */
+  .statusbar {
+    display: flex; gap: 8px; align-items: center; padding: 4px 14px; font-size: 12px; color: var(--muted);
+    background: var(--bar); border-top: 1px solid var(--border);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); } .dot.err { background: var(--err); } .dot.wait { background: #f59e0b; }
+
+  @media (max-width: 560px) {
+    body { padding: 0; } .window { height: 100vh; border-radius: 0; border: 0; }
+    .lights, .chip { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="window">
+
+  <div class="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="tabs">
+      <button class="tab active" data-tab="share">📤 Share</button>
+      <button class="tab" data-tab="downloads">📥 Downloads <span class="badge" id="badge">0</span></button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button class="icon-btn" id="stopBtn" title="Disconnect" disabled>✕</button>
+    <button class="icon-btn" id="reloadBtn" title="Reconnect" disabled>⟳</button>
+    <div class="address">
+      <span class="lock" id="lock">🔓</span>
+      <input type="text" id="address" placeholder="peer://website.peer (or a peer ID, or an invite link), then press Enter" autocomplete="off" spellcheck="false">
+    </div>
+    <span class="chip" id="myIdChip" title="Your peer ID">Connecting…</span>
+    <button class="icon-btn" id="copyLink" title="Copy your invite link" disabled>🔗</button>
+    <button class="icon-btn" id="shareLink" title="Share your invite link" disabled style="display:none">⤴</button>
+  </div>
+  <div class="loadbar" id="loadbar"><i></i></div>
+
+  <div class="page">
+    <!-- SHARE TAB -->
+    <div class="view active" id="view-share">
+      <h1>Peer Share</h1>
+      <p class="sub">Send files directly between two browsers. Nothing is uploaded to a server.</p>
+
+      <div class="drop disabled" id="drop">Connect to a peer to start sending.<br>Then drop files here or click to choose.</div>
+      <input type="file" id="fileInput" multiple hidden>
+
+      <h2>Sent</h2>
+      <ul id="outgoing"><li class="empty">Nothing sent yet.</li></ul>
+
+      <h2>Your address</h2>
+      <div class="linkrow">
+        <input type="text" id="nameInput" placeholder="Pick a name, e.g. website.peer" spellcheck="false" autocomplete="off">
+        <button id="claimBtn">Claim name</button>
+        <button class="secondary" id="randomBtn">Use random ID</button>
+      </div>
+      <div class="note" id="addrNote"></div>
+      <div class="note">Names are first come, first served and only work while your page is open. If someone else is using a name, you'll get a random ID instead.</div>
+
+      <h2>Host a web page</h2>
+      <div class="linkrow">
+        <button class="secondary" id="hostBtn">Choose HTML file…</button>
+        <button class="secondary" id="unhostBtn" disabled>Stop hosting</button>
+      </div>
+      <input type="file" id="hostInput" accept=".html,.htm,text/html" hidden>
+      <div class="note" id="hostInfo"></div>
+      <div class="note">When someone visits your address, your page opens in a tab on their side. It must be a single self-contained file.</div>
+
+      <h2>Your invite link</h2>
+      <div class="linkrow">
+        <input type="text" id="linkInput" placeholder="Your invite link appears here" spellcheck="false" autocomplete="off" disabled>
+        <button id="copyLink2" disabled>Copy</button>
+        <button class="secondary" id="resetLink" disabled>Reset</button>
+      </div>
+      <div class="note">You can edit this link, for example to point at the address where you've hosted this page. Keep the <code>#</code> and your ID at the end. Edits to the address part are remembered.</div>
+
+      <h2>How to connect</h2>
+      <ul class="how">
+        <li>Click 🔗 to copy your invite link and send it to the other person.</li>
+        <li>They open it and connect automatically. Or paste their ID into the address bar and press Enter.</li>
+      </ul>
+      <div class="note" id="linkNote"></div>
+    </div>
+
+    <!-- DOWNLOADS TAB -->
+    <div class="view" id="view-downloads">
+      <h1>Downloads</h1>
+      <p class="sub">Files other peers have sent you.</p>
+      <ul id="incoming"><li class="empty">Nothing received yet.</li></ul>
+    </div>
+  </div>
+
+  <div class="statusbar"><span class="dot wait" id="dot"></span><span id="status">Starting up…</span></div>
+</div>
+
+<script>
+(() => {
+  const CHUNK = 64 * 1024;
+  const MAX_BUFFERED = 8 * 1024 * 1024;
+
+  const $ = id => document.getElementById(id);
+  const address = $('address'), statusEl = $('status'), dot = $('dot'), loadbar = $('loadbar');
+  const drop = $('drop'), fileInput = $('fileInput');
+  const outgoingEl = $('outgoing'), incomingEl = $('incoming');
+
+  let peer = null, conn = null, lastTarget = '', receivedCount = 0, inviteLink = '';
+  let hostedHtml = null, hostedName = '', pendingHash = location.hash.slice(1);
+  const incoming = {};
+
+  const fmt = n => {
+    if (n < 1024) return n + ' B';
+    const u = ['KB', 'MB', 'GB', 'TB']; let i = -1;
+    do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
+    return n.toFixed(n < 10 ? 1 : 0) + ' ' + u[i];
+  };
+  const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+  // Friendly names: "website.peer" is stored as the PeerJS ID "ps-website_peer"
+  // (PeerJS IDs can't contain dots, so dots are swapped for underscores).
+  const NAME_RE = /^[a-z0-9]+(?:[-.][a-z0-9]+)*$/;
+  const isName = s => s.length >= 6 && s.endsWith('.peer') && NAME_RE.test(s);
+  const toPeerId = s => { const t = s.trim(), l = t.toLowerCase(); return isName(l) ? 'ps-' + l.replace(/\./g, '_') : t; };
+  const display = id => (id && id.startsWith('ps-')) ? id.slice(3).replace(/_/g, '.') : id;
+  const setStatus = (msg, kind = '') => {
+    statusEl.textContent = msg;
+    dot.className = 'dot ' + kind;
+  };
+  const setLoading = mode => { // 'indeterminate' | number (0-100) | null
+    loadbar.classList.toggle('indeterminate', mode === 'indeterminate');
+    loadbar.firstElementChild.style.width = typeof mode === 'number' ? mode + '%' : '';
+  };
+
+  // ---------- Tabs ----------
+  function showTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
+    if (name === 'downloads') { receivedCount = 0; updateBadge(); }
+  }
+  document.querySelectorAll('.tab').forEach(t => t.onclick = () => showTab(t.dataset.tab));
+  function updateBadge() {
+    $('badge').textContent = receivedCount;
+    $('badge').classList.toggle('show', receivedCount > 0);
+  }
+
+  // ---------- Peer setup ----------
+  function init(customId) {
+    peer = customId ? new Peer(customId) : new Peer();
+    peer.on('open', id => {
+      $('myIdChip').textContent = 'You: ' + display(id);
+      $('myIdChip').title = 'Your address: peer://' + display(id);
+      $('copyLink').disabled = false;
+      let savedBase = '';
+      try { savedBase = localStorage.getItem('peerShareBase') || ''; } catch (e) {}
+      inviteLink = location.href.split('#')[0] + '#' + display(id); // default link
+      $('linkInput').value = (savedBase || location.href.split('#')[0]) + '#' + display(id);
+      $('linkInput').disabled = false;
+      $('copyLink2').disabled = false;
+      $('resetLink').disabled = false;
+      if (navigator.share) { $('shareLink').style.display = ''; $('shareLink').disabled = false; }
+      if (location.protocol === 'file:') {
+        $('linkNote').textContent = 'This page is opened from a local file, so your invite link only works on this computer. Host the file (e.g. GitHub Pages or Netlify) to share the link with other devices, or send them your address: peer://' + display(id);
+      }
+      setLoading(null);
+      $('nameInput').value = id.startsWith('ps-') ? display(id) : '';
+      $('addrNote').textContent = 'Your address is peer://' + display(id) + '. Anyone can visit it while this page is open.';
+      setStatus('Ready at peer://' + display(id) + '. Enter an address in the bar, or share your link.', 'ok');
+
+      const target = pendingHash; pendingHash = '';
+      if (target) navigate(target);
+    });
+    peer.on('connection', c => {
+      if (conn && conn.open) { c.close(); return; }
+      setupConn(c);
+    });
+    peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
+    peer.on('error', err => {
+      setLoading(null);
+      if (err.type === 'unavailable-id' && customId) {
+        setStatus('The name ' + display(customId) + ' is already taken. Using a random ID instead.', 'err');
+        try { localStorage.removeItem('peerShareName'); } catch (e) {}
+        init();
+        return;
+      }
+      if (err.type === 'peer-unavailable') return setStatus('Nobody is online at that address.', 'err');
+      setStatus('Error: ' + (err.type || err.message), 'err');
+    });
+  }
+
+  // Accepts a bare ID, "peer://ID", or a full invite link ending in #ID
+  function parseTarget(text) {
+    text = text.trim();
+    if (text.includes('#')) text = text.split('#').pop();
+    return toPeerId(text.replace(/^peer:\/\//i, '').trim());
+  }
+
+  function navigate(text) {
+    const id = parseTarget(text);
+    if (!id || !peer) return;
+    if (id === peer.id) return setStatus("That's your own ID.", 'err');
+    if (conn) { conn.off && conn.close(); }
+    lastTarget = id;
+    address.value = 'peer://' + display(id);
+    setStatus('Connecting to peer://' + display(id) + '…', 'wait');
+    setLoading('indeterminate');
+    $('lock').textContent = '🔓';
+    const c = peer.connect(id, { reliable: true });
+    c._visit = true; // we are visiting: ask the host for its web page once connected
+    setupConn(c);
+  }
+
+  function setupConn(c) {
+    conn = c;
+    c.on('open', () => {
+      lastTarget = c.peer;
+      address.value = 'peer://' + display(c.peer);
+      if (c._visit) c.send({ type: 'visit' });
+      $('lock').textContent = '🔒';
+      $('stopBtn').disabled = false;
+      $('reloadBtn').disabled = false;
+      drop.classList.remove('disabled');
+      drop.innerHTML = 'Drop files here or click to choose';
+      setLoading(null);
+      setStatus('Connected to peer://' + display(c.peer), 'ok');
+    });
+    c.on('data', onData);
+    c.on('close', () => {
+      if (conn !== c) return;
+      conn = null;
+      $('lock').textContent = '🔓';
+      $('stopBtn').disabled = true;
+      drop.classList.add('disabled');
+      drop.innerHTML = 'Connect to a peer to start sending.<br>Then drop files here or click to choose.';
+      setLoading(null);
+      setStatus('Disconnected.', 'err');
+    });
+    c.on('error', err => { setLoading(null); setStatus('Connection error: ' + err, 'err'); });
+  }
+
+  // ---------- Open received HTML as a web page ----------
+  let pageCount = 0;
+  async function openPage(fileName, blob) {
+    const html = await blob.text();
+    let title = fileName;
+    try {
+      const t = new DOMParser().parseFromString(html, 'text/html').title.trim();
+      if (t) title = t;
+    } catch (e) {}
+
+    const id = 'page' + (++pageCount);
+
+    const tab = document.createElement('button');
+    tab.className = 'tab'; tab.dataset.tab = id;
+    const label = document.createElement('span');
+    label.className = 'tlabel'; label.textContent = '🌐 ' + title;
+    const x = document.createElement('span');
+    x.className = 'x'; x.textContent = '✕'; x.title = 'Close tab';
+    tab.append(label, x);
+    document.querySelector('.tabs').appendChild(tab);
+
+    const view = document.createElement('div');
+    view.className = 'view webview'; view.id = 'view-' + id;
+    const warn = document.createElement('div');
+    warn.className = 'warn';
+    warn.textContent = 'Sandboxed page from a peer (' + fileName + '). Only open files from people you trust.';
+    const frame = document.createElement('iframe');
+    // No allow-same-origin: the page can't touch Peer Share or its data
+    frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups allow-modals');
+    frame.srcdoc = html;
+    view.append(warn, frame);
+    document.querySelector('.page').appendChild(view);
+
+    tab.onclick = () => showTab(id);
+    x.onclick = e => {
+      e.stopPropagation();
+      const wasActive = tab.classList.contains('active');
+      tab.remove(); view.remove();
+      if (wasActive) showTab('downloads');
+    };
+    showTab(id);
+  }
+
+  // ---------- Receiving ----------
+  function onData(msg) {
+    if (!msg || !msg.type) return;
+
+    // Website hosting: a visitor asks for the page, the host replies with it
+    if (msg.type === 'visit') {
+      if (hostedHtml !== null) conn.send({ type: 'page', name: hostedName, html: hostedHtml });
+      else conn.send({ type: 'nopage' });
+      return;
+    }
+    if (msg.type === 'page') {
+      if (typeof msg.html === 'string') {
+        openPage(msg.name || 'page.html', new Blob([msg.html], { type: 'text/html' }));
+        setStatus('Opened ' + (msg.name || 'page') + ' from peer://' + display(conn ? conn.peer : ''), 'ok');
+      }
+      return;
+    }
+    if (msg.type === 'nopage') {
+      setStatus('Connected. This peer isn\'t hosting a web page, but you can send them files.', 'ok');
+      return;
+    }
+
+    if (msg.type === 'meta') {
+      if (incomingEl.querySelector('.empty')) incomingEl.innerHTML = '';
+      const li = document.createElement('li');
+      li.innerHTML = '<div class="name"></div><div class="meta"></div><progress max="100" value="0"></progress>';
+      li.querySelector('.name').textContent = msg.name;
+      li.querySelector('.meta').textContent = 'Receiving… 0 / ' + fmt(msg.size);
+      incomingEl.prepend(li);
+      incoming[msg.id] = { name: msg.name, mime: msg.mime, size: msg.size, chunks: [], received: 0, li };
+      setStatus('Receiving ' + msg.name + '…', 'wait');
+      if (!$('view-downloads').classList.contains('active')) { receivedCount++; updateBadge(); }
+    }
+
+    else if (msg.type === 'chunk') {
+      const t = incoming[msg.id];
+      if (!t) return;
+      t.chunks.push(msg.data);
+      t.received += msg.data.byteLength;
+      const pct = t.size ? (t.received / t.size) * 100 : 100;
+      t.li.querySelector('progress').value = pct;
+      t.li.querySelector('.meta').textContent = 'Receiving… ' + fmt(t.received) + ' / ' + fmt(t.size);
+      setLoading(pct);
+    }
+
+    else if (msg.type === 'done') {
+      const t = incoming[msg.id];
+      if (!t) return;
+      const blob = new Blob(t.chunks, { type: t.mime || 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      t.li.querySelector('progress').remove();
+      const meta = t.li.querySelector('.meta');
+      meta.textContent = fmt(t.size) + ' · ';
+      const a = document.createElement('a');
+      a.className = 'dl'; a.href = url; a.download = t.name; a.textContent = 'Download';
+      meta.appendChild(a);
+      if (/\.html?$/i.test(t.name) || t.mime === 'text/html') {
+        const fileName = t.name;
+        meta.appendChild(document.createTextNode(' · '));
+        const o = document.createElement('a');
+        o.className = 'dl'; o.href = '#'; o.textContent = 'Open as web page';
+        o.onclick = e => { e.preventDefault(); openPage(fileName, blob); };
+        meta.appendChild(o);
+      }
+      delete incoming[msg.id];
+      setLoading(null);
+      setStatus('Received ' + t.name, 'ok');
+    }
+  }
+
+  // ---------- Sending ----------
+  async function sendFile(file) {
+    if (!conn || !conn.open) return setStatus('Not connected.', 'err');
+
+    if (outgoingEl.querySelector('.empty')) outgoingEl.innerHTML = '';
+    const li = document.createElement('li');
+    li.innerHTML = '<div class="name"></div><div class="meta"></div><progress max="100" value="0"></progress>';
+    li.querySelector('.name').textContent = file.name;
+    const meta = li.querySelector('.meta'), bar = li.querySelector('progress');
+    meta.textContent = 'Sending… 0 / ' + fmt(file.size);
+    outgoingEl.prepend(li);
+    setStatus('Sending ' + file.name + '…', 'wait');
+
+    const id = uid();
+    conn.send({ type: 'meta', id, name: file.name, size: file.size, mime: file.type });
+
+    try {
+      for (let offset = 0; offset < file.size; offset += CHUNK) {
+        if (!conn || !conn.open) throw new Error('connection lost');
+        while (conn.dataChannel && conn.dataChannel.bufferedAmount > MAX_BUFFERED) {
+          await new Promise(r => setTimeout(r, 50));
+        }
+        const data = await file.slice(offset, offset + CHUNK).arrayBuffer();
+        conn.send({ type: 'chunk', id, data });
+
+        const sent = Math.min(offset + CHUNK, file.size);
+        const pct = (sent / file.size) * 100;
+        bar.value = pct;
+        setLoading(pct);
+        meta.textContent = 'Sending… ' + fmt(sent) + ' / ' + fmt(file.size);
+      }
+      conn.send({ type: 'done', id });
+      bar.remove();
+      meta.textContent = fmt(file.size) + ' · Sent ✓';
+      setStatus('Sent ' + file.name, 'ok');
+    } catch (e) {
+      bar.remove();
+      meta.textContent = 'Failed: ' + e.message;
+      setStatus('Failed to send ' + file.name, 'err');
+    }
+    setLoading(null);
+  }
+
+  async function sendFiles(files) { for (const f of files) await sendFile(f); }
+
+  // ---------- Copy / share ----------
+  async function copyText(text, okMsg) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus(okMsg, 'ok');
+    } catch (e) {
+      const prev = address.value;
+      address.value = text;
+      address.select();
+      const ok = document.execCommand('copy');
+      address.value = prev;
+      setStatus(ok ? okMsg : 'Copy failed. Your link: ' + text, ok ? 'ok' : 'err');
+    }
+  }
+
+  // ---------- Wiring ----------
+  address.addEventListener('keydown', e => { if (e.key === 'Enter') navigate(address.value); });
+  address.addEventListener('focus', () => address.select());
+  $('stopBtn').onclick = () => { if (conn) conn.close(); };
+  $('reloadBtn').onclick = () => { if (lastTarget) navigate(lastTarget); };
+  const currentLink = () => $('linkInput').value.trim() || inviteLink;
+  $('copyLink').onclick = () => copyText(currentLink(), 'Invite link copied.');
+  $('copyLink2').onclick = () => copyText(currentLink(), 'Invite link copied.');
+  $('shareLink').onclick = () => navigator.share({ title: 'Peer Share', text: 'Send me files directly:', url: currentLink() }).catch(() => {});
+  $('resetLink').onclick = () => {
+    $('linkInput').value = inviteLink;
+    try { localStorage.removeItem('peerShareBase'); } catch (e) {}
+    setStatus('Invite link reset to default.', 'ok');
+  };
+  $('linkInput').addEventListener('input', () => {
+    const v = $('linkInput').value;
+    if (v.includes('#')) {
+      try { localStorage.setItem('peerShareBase', v.split('#')[0]); } catch (e) {}
+    }
+  });
+
+  // Claim a name / go back to a random ID
+  function restart(customId) {
+    if (conn) { try { conn.close(); } catch (e) {} }
+    conn = null;
+    if (peer) { try { peer.destroy(); } catch (e) {} }
+    ['copyLink', 'copyLink2', 'resetLink', 'shareLink'].forEach(id => $(id).disabled = true);
+    $('linkInput').disabled = true;
+    setStatus('Claiming ' + (customId ? 'peer://' + display(customId) : 'a random ID') + '…', 'wait');
+    setLoading('indeterminate');
+    init(customId);
+  }
+  function claimName() {
+    let raw = $('nameInput').value.trim().toLowerCase().replace(/^peer:\/\//, '');
+    if (raw && !raw.includes('.')) raw += '.peer'; // "mysite" -> "mysite.peer"
+    if (!isName(raw)) {
+      return setStatus('Names use letters, numbers, hyphens and dots, and end in .peer (for example mysite.peer).', 'err');
+    }
+    try { localStorage.setItem('peerShareName', raw); } catch (e) {}
+    restart(toPeerId(raw));
+  }
+  $('claimBtn').onclick = claimName;
+  $('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') claimName(); });
+  $('randomBtn').onclick = () => {
+    try { localStorage.removeItem('peerShareName'); } catch (e) {}
+    $('nameInput').value = '';
+    restart();
+  };
+
+  // Host a web page at your address
+  $('hostBtn').onclick = () => $('hostInput').click();
+  $('hostInput').onchange = async () => {
+    const f = $('hostInput').files[0];
+    $('hostInput').value = '';
+    if (!f) return;
+    hostedHtml = await f.text();
+    hostedName = f.name;
+    $('unhostBtn').disabled = false;
+    $('hostInfo').textContent = 'Hosting ' + f.name + ' at peer://' + display(peer.id) + ' while this page stays open.';
+  };
+  $('unhostBtn').onclick = () => {
+    hostedHtml = null; hostedName = '';
+    $('unhostBtn').disabled = true;
+    $('hostInfo').textContent = '';
+  };
+
+  drop.onclick = () => fileInput.click();
+  fileInput.onchange = () => { sendFiles([...fileInput.files]); fileInput.value = ''; };
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => sendFiles([...e.dataTransfer.files]));
+
+  let savedName = '';
+  try { savedName = localStorage.getItem('peerShareName') || ''; } catch (e) {}
+  init(savedName ? toPeerId(savedName) : undefined);
+})();
+</script>
+</body>
+</html>
