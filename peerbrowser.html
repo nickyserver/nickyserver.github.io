@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Peer Browser</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+:root {
+  color-scheme: dark;
+  --desk: #090d18;
+  --frame: #111827;
+  --tab: #182338;
+  --tab-idle: #101827;
+  --bar: #111b2c;
+  --page: #fff;
+  --text: #e8eefc;
+  --muted: #91a0ba;
+  --accent: #7c9cff;
+  --accent-strong: #5279f5;
+  --border: rgba(158,178,218,.16);
+  --field: #0b1424;
+  --ok: #39d98a;
+  --err: #ff6b7a;
+  --card: #17243a;
+  --shadow: 0 24px 80px rgba(0,0,0,.48);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  padding: 0;
+  color: var(--text);
+  background:
+    radial-gradient(ellipse at 14% 0%, rgba(78,111,220,.22), transparent 38%),
+    radial-gradient(ellipse at 90% 100%, rgba(0,190,190,.10), transparent 35%),
+    var(--desk);
+  font: 14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+button, input { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+.window {
+  width: 100%;
+  height: 100vh;
+  min-height: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--frame);
+  border: 1px solid rgba(170,190,235,.19);
+  border-radius: 0;
+  box-shadow: none;
+}
+.titlebar {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 8px 14px 0;
+  background: #0e1727;
+}
+.lights { display:flex; gap:7px; align-items:center; padding:0 3px 8px; }
+.lights i { width:11px; height:11px; border-radius:50%; display:block; box-shadow: inset 0 0 0 1px rgba(0,0,0,.16); }
+.lights i:nth-child(1) { background:#ff625d; }
+.lights i:nth-child(2) { background:#ffbd44; }
+.lights i:nth-child(3) { background:#35ce69; }
+.tabs { display:flex; gap:5px; flex:1; min-width:0; align-items:flex-end; }
+.tab {
+  min-width:90px; max-width:230px; flex:0 1 210px;
+  display:flex; align-items:center; gap:9px;
+  padding:9px 11px 8px 14px;
+  color:#9eacc5; background:rgba(255,255,255,.035);
+  border:1px solid transparent; border-bottom:0;
+  border-radius:10px 10px 0 0;
+  font-size:13px; cursor:pointer; white-space:nowrap;
+  transition:background .16s ease,color .16s ease;
+}
+.tab:hover { background:rgba(255,255,255,.075); color:#eaf0ff; }
+.tab.active { color:var(--text); background:var(--frame); border-color:var(--border); }
+.tab .tlabel { overflow:hidden; text-overflow:ellipsis; flex:1; text-align:left; }
+.tab .x { flex:none; width:20px; height:20px; line-height:20px; text-align:center; border-radius:6px; font-size:12px; opacity:.65; }
+.tab .x:hover { opacity:1; background:rgba(255,255,255,.12); }
+.newtab {
+  flex:none; width:30px; height:30px; margin:0 0 5px 2px;
+  border:1px solid transparent; border-radius:9px;
+  background:transparent; color:#c6d2eb; font-size:20px; cursor:pointer;
+}
+.newtab:hover { background:rgba(255,255,255,.09); border-color:var(--border); }
+.toolbar {
+  display:flex; gap:7px; align-items:center;
+  padding:10px 15px 12px; background:var(--frame);
+  border-bottom:1px solid var(--border);
+}
+.icon-btn {
+  width:35px; height:35px; display:grid; place-items:center;
+  border:1px solid transparent; border-radius:11px;
+  background:transparent; color:#c3cfe6; font-size:18px;
+  cursor:pointer; flex:none; transition:.16s ease;
+}
+.icon-btn:hover:not(:disabled) { background:rgba(255,255,255,.075); border-color:var(--border); color:#fff; }
+.icon-btn:disabled { opacity:.28; cursor:default; }
+.address {
+  flex:1; min-width:0; height:38px; display:flex; align-items:center; gap:10px;
+  padding:0 14px; background:var(--field);
+  border:1px solid var(--border); border-radius:12px;
+  transition:border-color .16s, box-shadow .16s;
+}
+.address:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px rgba(124,156,255,.13); }
+.address .lock { font-size:13px; flex:none; opacity:.85; }
+.address input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--text); font-size:13px; }
+.address input::placeholder { color:#71819d; }
+.chip {
+  flex:none; display:flex; align-items:center; gap:7px;
+  font-size:12px; color:#b9c8e3; background:rgba(57,217,138,.09);
+  border:1px solid rgba(57,217,138,.19); border-radius:20px;
+  padding:6px 11px; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.chip::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--ok); box-shadow:0 0 10px rgba(57,217,138,.6); }
+.toggle { flex:none; font-size:12px; color:var(--muted); display:flex; gap:6px; align-items:center; cursor:pointer; user-select:none; white-space:nowrap; }
+.toggle input { accent-color:var(--accent-strong); }
+.loadbar { height:2px; background:transparent; position:relative; overflow:hidden; flex:none; }
+.loadbar i { position:absolute; left:0; top:0; bottom:0; width:0; background:linear-gradient(90deg,#6e8cff,#36d6d0); }
+.loadbar.indeterminate i { width:30%; animation:slide 1s infinite ease-in-out; }
+@keyframes slide { from {left:-30%;} to {left:100%;} }
+.page { flex:1; position:relative; background:var(--page); min-height:0; }
+.view { position:absolute; inset:0; display:none; flex-direction:column; }
+.view.active { display:flex; }
+.warn {
+  flex:none; display:flex; align-items:center; gap:8px;
+  font-size:11px; letter-spacing:.01em; padding:7px 15px;
+  color:#66758e; background:#f4f6fa; border-bottom:1px solid #e6eaf1;
+}
+.warn::before { content:"ⓘ"; font-size:13px; color:#5575c9; }
+.view iframe { flex:1; width:100%; border:0; background:#fff; }
+.overlay {
+  position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+  text-align:center; padding:28px; color:var(--muted);
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(104,137,235,.12), transparent 45%),
+    #101a2b;
+}
+.overlay.show { display:flex; }
+.overlay > div { max-width:560px; padding:34px 30px; }
+.overlay h1 { margin:0 0 10px; font-size:clamp(22px,3vw,30px); letter-spacing:-.04em; color:#edf2ff; }
+.overlay p { margin:7px auto; max-width:500px; color:#a6b4ce; }
+.overlay.err h1 { color:var(--err); }
+.overlay a.dl { display:inline-flex; margin-top:14px; padding:10px 16px; color:#fff; background:var(--accent-strong); border-radius:10px; text-decoration:none; font-weight:650; }
+.overlay a.dl:hover { filter:brightness(1.12); }
+code { color:#c9d7ff; background:#202d45; padding:3px 7px; border-radius:6px; }
+.statusbar {
+  min-height:32px; display:flex; gap:9px; align-items:center;
+  padding:5px 15px; font-size:11px; color:#8493ad;
+  background:#0e1727; border-top:1px solid var(--border);
+}
+.statusbar .grow { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dot { width:7px; height:7px; border-radius:50%; background:#8493ad; flex:none; }
+.dot.ok { background:var(--ok); box-shadow:0 0 8px rgba(57,217,138,.35); }
+.dot.err { background:var(--err); }
+.dot.wait { background:#f5b84b; }
+button:focus-visible, input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+@media (max-width:700px) {
+  body { padding:0; }
+  .window { width:100%; height:100vh; min-height:0; border:0; border-radius:0; }
+  .titlebar { gap:7px; padding-left:9px; padding-right:8px; }
+  .lights { display:none; }
+  .toolbar { gap:3px; padding:8px; }
+  .icon-btn { width:32px; height:34px; }
+  .chip { display:none; }
+  .toggle { font-size:0; gap:0; }
+  .toggle input { width:16px; height:16px; }
+  .tab { min-width:58px; padding-left:9px; gap:5px; }
+  .statusbar span:last-child { display:none; }
+}
+@media (max-width:420px) {
+  .toolbar { flex-wrap:wrap; }
+  .address { order:2; flex-basis:100%; }
+  .toggle { margin-left:auto; }
+}
+</style>
+</head>
+<body>
+<div class="window">
+
+  <div class="titlebar">
+    <div class="lights"><i></i><i></i><i></i></div>
+    <div class="tabs" id="tabs"><button class="newtab" id="newTab" title="New tab" aria-label="New tab">+</button></div>
+  </div>
+
+  <div class="toolbar">
+    <button class="icon-btn" id="backBtn" title="Back" aria-label="Go back" disabled>←</button>
+    <button class="icon-btn" id="fwdBtn" title="Forward" aria-label="Go forward" disabled>→</button>
+    <button class="icon-btn" id="reloadBtn" title="Reload" aria-label="Reload page" disabled>⟳</button>
+    <div class="address">
+      <span class="lock" id="lock">🔓</span>
+      <input type="text" id="address" placeholder="Enter a peer:// address and press Enter" autocomplete="off" spellcheck="false">
+    </div>
+    <label class="toggle" title="Run scripts from pages (still sandboxed, still no network)"><input type="checkbox" id="scriptsToggle" checked> Scripts</label>
+    <span class="chip" id="myIdChip">Connecting…</span>
+  </div>
+  <div class="loadbar" id="loadbar"><i></i></div>
+
+  <div class="page" id="page"></div>
+
+  <div class="statusbar"><span class="dot wait" id="dot"></span><span class="grow" id="status">Starting up…</span><span>Only peer:// addresses are loaded</span></div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const addressEl = $('address'), statusEl = $('status'), dot = $('dot'), loadbar = $('loadbar');
+  const REQ_TIMEOUT = 20000, CONNECT_TIMEOUT = 15000;
+
+  // ---------- Names ("website.peer" <-> PeerJS ID "ps-website_peer") ----------
+  const NAME_RE = /^[a-z0-9]+(?:[-.][a-z0-9]+)*$/;
+  const isName = s => s.length >= 6 && s.endsWith('.peer') && NAME_RE.test(s);
+  const toPeerId = h => { const l = h.toLowerCase(); return isName(l) ? 'ps-' + l.replace(/\./g, '_') : h; };
+  const displayId = id => (id && id.startsWith('ps-')) ? id.slice(3).replace(/_/g, '.') : id;
+
+  // ---------- peer:// URLs (the only kind this browser understands) ----------
+  function parsePeerUrl(raw) {
+    raw = String(raw || '').trim();
+    let m = /^peer:\/\/([A-Za-z0-9_.-]+)(\/[^?#]*)?(\?[^#]*)?(#.*)?$/i.exec(raw);
+    if (!m) {
+      m = /^([A-Za-z0-9.-]+\.peer)(\/[^?#]*)?(\?[^#]*)?(#.*)?$/i.exec(raw); // bare "name.peer/..."
+      if (!m || !isName(m[1].toLowerCase())) return null;
+    }
+    let host = m[1];
+    if (host.toLowerCase().startsWith('ps-')) {
+      const n = host.slice(3).replace(/_/g, '.').toLowerCase();
+      if (isName(n)) host = n;
+    }
+    if (isName(host.toLowerCase())) host = host.toLowerCase();
+    return { host, path: m[2] || '/', query: m[3] || '', hash: m[4] || '' };
+  }
+  const fmt = u => 'peer://' + u.host + u.path + u.query + u.hash;
+
+  // Resolve a link/resource against the current page. Anything that isn't peer:// or relative returns null (blocked).
+  function resolve(href, base) {
+    href = String(href || '').trim();
+    if (/^peer:\/\//i.test(href)) return parsePeerUrl(href);
+    if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//')) return null;
+    try {
+      const u = new URL(href, 'http://x' + base.path + base.query);
+      return { host: base.host, path: decodeURI(u.pathname) === u.pathname ? u.pathname : u.pathname, query: u.search, hash: u.hash };
+    } catch (e) { return null; }
+  }
+
+  const setStatus = (msg, kind = '') => { statusEl.textContent = msg; dot.className = 'dot ' + kind; };
+  const setLoading = on => loadbar.classList.toggle('indeterminate', !!on);
+
+  // ---------- PeerJS client ----------
+  let peer = null, myId = null;
+  const conns = new Map(), connecting = new Map(), pending = new Map();
+  let reqN = 0;
+  const ready = new Promise(resolveReady => {
+    peer = new Peer();
+    peer.on('open', id => { myId = id; $('myIdChip').textContent = 'Online'; resolveReady(); setStatus('Ready. Enter a peer:// address.', 'ok'); });
+    peer.on('disconnected', () => { $('myIdChip').textContent = 'Reconnecting…'; try { peer.reconnect(); } catch (e) {} });
+    peer.on('error', err => {
+      if (err.type === 'peer-unavailable') {
+        for (const [pid, c] of connecting) {
+          if (String(err.message).includes(pid)) c.reject(new Error('Nobody is online at peer://' + displayId(pid) + '.'));
+        }
+        return;
+      }
+      $('myIdChip').textContent = 'Error';
+      setStatus('Peer error: ' + (err.type || err.message), 'err');
+    });
+  });
+
+  function failPending(pid, msg) {
+    for (const [id, p] of pending) if (p.peerId === pid) { clearTimeout(p.timer); pending.delete(id); p.reject(new Error(msg)); }
+  }
+  function onData(msg) {
+    if (!msg || (msg.type !== 'file' && msg.type !== 'nofile')) return;
+    const p = pending.get(msg.id); if (!p) return;
+    clearTimeout(p.timer); pending.delete(msg.id);
+    if (msg.type === 'nofile') return p.resolve({ type: 'nofile', path: msg.path });
+    p.resolve({ type: 'file', path: msg.path, mime: msg.mime || 'application/octet-stream', bytes: new Uint8Array(msg.data) });
+  }
+  function getConn(pid) {
+    const ex = conns.get(pid);
+    if (ex && ex.open) return Promise.resolve(ex);
+    if (connecting.has(pid)) return connecting.get(pid).promise;
+    let rej;
+    const promise = new Promise((resolveC, rejectC) => {
+      rej = rejectC;
+      if (pid === myId) return rejectC(new Error("That's this browser's own ID."));
+      const c = peer.connect(pid, { reliable: true });
+      const timer = setTimeout(() => { try { c.close(); } catch (e) {} rejectC(new Error('Could not reach peer://' + displayId(pid) + ' (timed out).')); }, CONNECT_TIMEOUT);
+      c.on('open', () => { clearTimeout(timer); conns.set(pid, c); resolveC(c); });
+      c.on('data', onData);
+      c.on('close', () => { conns.delete(pid); failPending(pid, 'Connection closed.'); });
+      c.on('error', e => { clearTimeout(timer); rejectC(new Error('Connection error: ' + (e.type || e.message || e))); });
+    }).finally(() => connecting.delete(pid));
+    connecting.set(pid, { promise, reject: rej });
+    return promise;
+  }
+  // Same protocol as Peer Share's host: {type:'get', id, path} -> {type:'file'|'nofile', id, ...}
+  async function fetchPeer(u) {
+    await ready;
+    const conn = await getConn(toPeerId(u.host));
+    return new Promise((resolveF, rejectF) => {
+      const id = ++reqN;
+      const timer = setTimeout(() => { pending.delete(id); rejectF(new Error('The peer did not respond in time.')); }, REQ_TIMEOUT);
+      pending.set(id, { resolve: resolveF, reject: rejectF, timer, peerId: conn.peer });
+      try { conn.send({ type: 'get', id, path: u.path }); }
+      catch (e) { clearTimeout(timer); pending.delete(id); rejectF(e); }
+    });
+  }
+
+  // ---------- Tabs ----------
+  const tabs = []; let active = null, tabN = 0;
+  const scriptsOn = () => $('scriptsToggle').checked;
+
+  function newTab(url) {
+    const t = { id: ++tabN, hist: [], idx: -1, url: null, title: 'New tab', token: 0 };
+    t.btn = document.createElement('button'); t.btn.className = 'tab';
+    t.label = document.createElement('span'); t.label.className = 'tlabel'; t.label.textContent = 'New tab';
+    const x = document.createElement('span'); x.className = 'x'; x.textContent = '✕'; x.title = 'Close tab';
+    t.btn.append(t.label, x);
+    $('tabs').insertBefore(t.btn, $('newTab'));
+
+    t.view = document.createElement('div'); t.view.className = 'view';
+    const warn = document.createElement('div'); warn.className = 'warn';
+    warn.textContent = 'Sandboxed page from a peer. Only open sites from people you trust.';
+    t.frame = document.createElement('iframe'); t.frame.title = 'page';
+    t.overlay = document.createElement('div'); t.overlay.className = 'overlay';
+    t.view.append(warn, t.frame, t.overlay);
+    $('page').appendChild(t.view);
+
+    t.btn.onclick = () => activate(t);
+    x.onclick = e => { e.stopPropagation(); closeTab(t); };
+    tabs.push(t);
+    overlay(t, 'New tab', null, 'welcome');
+    activate(t);
+    if (url) go(t, url); else addressEl.focus();
+    return t;
+  }
+  function activate(t) {
+    active = t;
+    tabs.forEach(o => { o.btn.classList.toggle('active', o === t); o.view.classList.toggle('active', o === t); });
+    refreshUI();
+  }
+  function closeTab(t) {
+    const i = tabs.indexOf(t);
+    t.token++; t.btn.remove(); t.view.remove(); tabs.splice(i, 1);
+    if (!tabs.length) return newTab();
+    if (active === t) activate(tabs[Math.min(i, tabs.length - 1)]);
+  }
+  function refreshUI() {
+    const t = active; if (!t) return;
+    if (document.activeElement !== addressEl) addressEl.value = t.url ? fmt(t.url) : '';
+    $('lock').textContent = t.url ? '🔒' : '🔓';
+    $('backBtn').disabled = t.idx <= 0;
+    $('fwdBtn').disabled = t.idx >= t.hist.length - 1;
+    $('reloadBtn').disabled = !t.url;
+  }
+  function setTitle(t, title) { t.title = title; t.label.textContent = '🌐 ' + title; t.btn.title = title; }
+
+  // ---------- Overlay messages inside a tab ----------
+  function overlay(t, title, msg, kind, node) {
+    const o = t.overlay; o.innerHTML = ''; o.className = 'overlay show' + (kind === 'err' ? ' err' : '');
+    const box = document.createElement('div');
+    const h = document.createElement('h1'); h.textContent = title; box.appendChild(h);
+    if (kind === 'welcome') {
+      box.insertAdjacentHTML('beforeend',
+        '<p>This browser only opens <b>peer://</b> addresses.</p>' +
+        '<p>Try <code>peer://website.peer/</code> or a site hosted with Peer Share.</p>');
+    } else if (msg) { const p = document.createElement('p'); p.textContent = msg; box.appendChild(p); }
+    if (node) box.appendChild(node);
+    o.appendChild(box);
+  }
+  const hideOverlay = t => { t.overlay.className = 'overlay'; };
+
+  // ---------- Navigation ----------
+  function go(t, raw) {
+    const u = parsePeerUrl(raw);
+    if (!u) {
+      overlay(t, 'Blocked', 'Only peer://<name>/<path> addresses are allowed. http, https, file and every other scheme are never loaded.', 'err');
+      setStatus('Blocked: not a peer:// address.', 'err');
+      return;
+    }
+    load(t, u);
+  }
+  async function load(t, u, noHist) {
+    const token = ++t.token;
+    setLoading(true); setStatus('Loading ' + fmt(u) + '…', 'wait');
+    overlay(t, 'Loading…', fmt(u));
+    if (t === active) addressEl.value = fmt(u);
+    try {
+      const res = await fetchPeer(u);
+      if (token !== t.token) return;
+      if (!noHist) { t.hist.splice(t.idx + 1); t.hist.push(u); t.idx = t.hist.length - 1; }
+      t.url = u;
+      if (res.type === 'nofile') {
+        setTitle(t, '404');
+        overlay(t, '404', 'No file at ' + fmt(u), 'err');
+        setStatus('404 ' + fmt(u), 'err');
+      } else {
+        await render(t, u, res, token);
+        if (token !== t.token) return;
+        setStatus('Loaded ' + fmt(u), 'ok');
+      }
+    } catch (e) {
+      if (token !== t.token) return;
+      overlay(t, 'Could not load page', e.message, 'err');
+      setStatus(e.message, 'err');
+    } finally {
+      if (token === t.token) setLoading(false);
+      refreshUI();
+    }
+  }
+  function handleNav(t, href, query) {
+    if (!t.url) return;
+    const target = resolve(href === '' ? t.url.path : href, t.url);
+    if (!target) { setStatus('Blocked: that link is not a peer:// address.', 'err'); return; }
+    if (typeof query === 'string') { target.query = query ? '?' + query : ''; target.hash = ''; }
+    load(t, target);
+  }
+  $('backBtn').onclick = () => { const t = active; if (t && t.idx > 0) { t.idx--; load(t, t.hist[t.idx], true); } };
+  $('fwdBtn').onclick = () => { const t = active; if (t && t.idx < t.hist.length - 1) { t.idx++; load(t, t.hist[t.idx], true); } };
+  $('reloadBtn').onclick = () => { if (active && active.url) load(active, active.url, true); };
+  $('newTab').onclick = () => newTab();
+  $('scriptsToggle').onchange = () => { if (active && active.url) load(active, active.url, true); };
+  addressEl.addEventListener('keydown', e => { if (e.key === 'Enter' && active) { go(active, addressEl.value); addressEl.blur(); } });
+  addressEl.addEventListener('focus', () => addressEl.select());
+  addressEl.addEventListener('blur', refreshUI);
+
+  // ---------- Rendering ----------
+  const dec = b => new TextDecoder().decode(b);
+  const toDataUrl = res => new Promise(r => {
+    const fr = new FileReader();
+    fr.onload = () => r(fr.result); fr.onerror = () => r('');
+    fr.readAsDataURL(new Blob([res.bytes], { type: res.mime }));
+  });
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const lastSeg = p => decodeURIComponent((p.split('/').filter(Boolean).pop()) || 'file');
+
+  async function render(t, u, res, token) {
+    const mime = (res.mime || '').split(';')[0].trim().toLowerCase();
+    const name = lastSeg(res.path || u.path);
+    setTitle(t, name);
+
+    if (mime === 'text/html' || mime === 'application/xhtml+xml') return renderHtml(t, u, res, token);
+
+    if (/^image\//.test(mime) || /^(audio|video)\//.test(mime)) {
+      const url = await toDataUrl(res); if (token !== t.token) return;
+      const tag = mime.startsWith('image/') ? '<img src="' + url + '" style="max-width:100%">'
+        : '<' + mime.split('/')[0] + ' controls src="' + url + '" style="max-width:100%"></' + mime.split('/')[0] + '>';
+      return showDoc(t, '<body style="margin:16px;font-family:system-ui">' + tag + '</body>', false);
+    }
+    if (/^text\//.test(mime) || /json|xml|javascript/.test(mime)) {
+      return showDoc(t, '<body style="margin:16px"><pre style="white-space:pre-wrap;word-break:break-word">' + esc(dec(res.bytes)) + '</pre></body>', false);
+    }
+    // anything else: offer a download
+    const a = document.createElement('a');
+    a.className = 'dl'; a.textContent = 'Download ' + name;
+    a.href = URL.createObjectURL(new Blob([res.bytes], { type: mime }));
+    a.download = name;
+    overlay(t, name, 'This file type can\'t be displayed (' + (mime || 'unknown') + ').', null, a);
+  }
+
+  function showDoc(t, bodyHtml, withScripts, extraHead) {
+    const csp = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; media-src data:; font-src data:; form-action 'none';"
+      + (withScripts ? " script-src 'unsafe-inline';" : '');
+    const nav = withScripts ? '<script>' + NAV_SCRIPT + '<\/script>' : '';
+    t.frame.setAttribute('sandbox', withScripts ? 'allow-scripts allow-forms' : 'allow-same-origin allow-forms');
+    t.frame.onload = () => {
+      hideOverlay(t);
+      if (withScripts) return;
+      const d = t.frame.contentDocument; if (!d) return;
+      d.addEventListener('click', e => {
+        const a = e.target.closest && e.target.closest('a[href]'); if (!a) return;
+        const h = a.getAttribute('href'); if (h.startsWith('#')) return;
+        e.preventDefault(); handleNav(t, h);
+      }, true);
+      d.addEventListener('submit', e => {
+        e.preventDefault();
+        const f = e.target;
+        handleNav(t, f.getAttribute('action') || '', new URLSearchParams(new FormData(f)).toString());
+      }, true);
+    };
+    t.frame.srcdoc = '<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="' + csp + '">' + nav + (extraHead || '') + '</head>' + bodyHtml + '</html>';
+  }
+  // Runs inside the sandboxed page (scripts mode): sends link clicks and form submits to the browser.
+  const NAV_SCRIPT = "document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href]');if(!a)return;var h=a.getAttribute('href');if(h.charAt(0)==='#')return;e.preventDefault();parent.postMessage({peerNav:h},'*');},true);"
+    + "document.addEventListener('submit',function(e){e.preventDefault();var f=e.target;parent.postMessage({peerNav:f.getAttribute('action')||'',form:new URLSearchParams(new FormData(f)).toString()},'*');},true);";
+  window.addEventListener('message', e => {
+    const t = tabs.find(o => o.frame.contentWindow === e.source);
+    if (!t || !e.data || typeof e.data.peerNav !== 'string') return;
+    handleNav(t, e.data.peerNav, typeof e.data.form === 'string' ? e.data.form : undefined);
+  });
+
+  async function renderHtml(t, u, res, token) {
+    const withScripts = scriptsOn();
+    const doc = new DOMParser().parseFromString(dec(res.bytes), 'text/html');
+    doc.querySelectorAll('base,iframe,frame,frameset,object,embed,applet,meta[http-equiv]').forEach(n => n.remove());
+    if (doc.title.trim()) setTitle(t, doc.title.trim());
+
+    const dataCache = new Map();
+    const getRes = href => {
+      const r = resolve(href, u); if (!r) return null;
+      return { r, p: fetchPeer(r).catch(() => null) };
+    };
+    const dataUrl = async href => {
+      href = (href || '').trim();
+      if (!href) return '';
+      if (/^data:/i.test(href)) return href;
+      const g = getRes(href); if (!g) return '';
+      const k = g.r.path;
+      if (!dataCache.has(k)) dataCache.set(k, g.p.then(x => (x && x.type === 'file') ? toDataUrl(x) : ''));
+      return dataCache.get(k);
+    };
+    const textOf = async href => {
+      const g = getRes(href); if (!g) return null;
+      const x = await g.p;
+      return (x && x.type === 'file') ? { text: dec(x.bytes), url: g.r } : null;
+    };
+    async function inlineCss(css, base) {
+      css = css.replace(/@import[^;]*;/gi, '');
+      const re = /url\(\s*(['"]?)([^'")]+)\1\s*\)/gi;
+      const found = [...new Set([...css.matchAll(re)].map(m => m[2]))];
+      const map = new Map();
+      await Promise.all(found.map(async h => {
+        if (/^data:/i.test(h)) return map.set(h, h);
+        const r = resolve(h, base); if (!r) return map.set(h, '');
+        const x = await fetchPeer(r).catch(() => null);
+        map.set(h, (x && x.type === 'file') ? await toDataUrl(x) : '');
+      }));
+      return css.replace(re, (m, q, h) => map.get(h) ? 'url("' + map.get(h) + '")' : 'none');
+    }
+
+    const jobs = [];
+    doc.querySelectorAll('link').forEach(l => {
+      const isCss = /\bstylesheet\b/i.test(l.getAttribute('rel') || '') && l.getAttribute('href');
+      if (!isCss) return l.remove();
+      jobs.push((async () => {
+        const got = await textOf(l.getAttribute('href'));
+        if (!got) return l.remove();
+        const s = doc.createElement('style'); s.textContent = await inlineCss(got.text, got.url);
+        l.replaceWith(s);
+      })());
+    });
+    doc.querySelectorAll('style').forEach(s => jobs.push((async () => { s.textContent = await inlineCss(s.textContent, u); })()));
+    doc.querySelectorAll('[style]').forEach(el => jobs.push((async () => { el.setAttribute('style', await inlineCss(el.getAttribute('style'), u)); })()));
+    doc.querySelectorAll('script').forEach(s => {
+      if (!withScripts) return s.remove();
+      const src = s.getAttribute('src');
+      if (!src) return;
+      jobs.push((async () => {
+        const got = await textOf(src);
+        s.removeAttribute('src'); s.removeAttribute('integrity'); s.removeAttribute('crossorigin');
+        if (!got) return s.remove();
+        s.textContent = got.text.replace(/<\/script/gi, '<\\/script');
+      })());
+    });
+    doc.querySelectorAll('img,source,audio,video,input[type=image]').forEach(el => {
+      el.removeAttribute('srcset');
+      const src = el.getAttribute('src');
+      if (src !== null) jobs.push((async () => {
+        const d = await dataUrl(src);
+        if (d) el.setAttribute('src', d); else el.removeAttribute('src');
+      })());
+      const poster = el.getAttribute && el.getAttribute('poster');
+      if (poster) jobs.push((async () => {
+        const d = await dataUrl(poster);
+        if (d) el.setAttribute('poster', d); else el.removeAttribute('poster');
+      })());
+    });
+    doc.querySelectorAll('a').forEach(a => { a.removeAttribute('target'); a.removeAttribute('ping'); });
+    if (!withScripts) doc.querySelectorAll('*').forEach(el => [...el.attributes].forEach(a => { if (/^on/i.test(a.name)) el.removeAttribute(a.name); }));
+
+    await Promise.all(jobs);
+    if (token !== t.token) return;
+    showDoc(t, doc.body.outerHTML, withScripts, doc.head.innerHTML);
+  }
+
+  // ---------- Start ----------
+  newTab();
+})();
+</script>
+</body>
+</html>
