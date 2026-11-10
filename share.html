@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Loading..</title>
+<title>Peer Share</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
   :root {
@@ -182,14 +182,17 @@
       <div class="note" id="addrNote"></div>
       <div class="note">Names are first come, first served and only work while your page is open. If someone else is using a name, you'll get a random ID instead.</div>
 
-      <h2>Host a web page</h2>
+      <h2>Host a website</h2>
       <div class="linkrow">
-        <button class="secondary" id="hostBtn">Choose HTML file…</button>
-        <button class="secondary" id="unhostBtn" disabled>Stop hosting</button>
+        <button class="secondary" id="hostBtn">Add files…</button>
+        <button class="secondary" id="hostFolderBtn">Add folder…</button>
+        <button class="secondary" id="unhostBtn" disabled>Remove all</button>
       </div>
-      <input type="file" id="hostInput" accept=".html,.htm,text/html" hidden>
+      <input type="file" id="hostInput" multiple hidden>
+      <input type="file" id="hostFolderInput" webkitdirectory multiple hidden>
+      <ul id="hostList" style="margin-top:12px"></ul>
       <div class="note" id="hostInfo"></div>
-      <div class="note">When someone visits your address, your page opens in a tab on their side. It must be a single self-contained file.</div>
+      <div class="note">Add pages, images, styles, scripts or any other files. Visitors using a peer:// browser (like vav4.3) can open any of them at peer://yourname.peer/filename, and links between your pages work. Files stay on your computer and are only sent when someone asks for them. Peer Share's own tabs only show your home page.</div>
 
       <h2>Your invite link</h2>
       <div class="linkrow">
@@ -229,7 +232,8 @@
   const outgoingEl = $('outgoing'), incomingEl = $('incoming');
 
   let peer = null, conn = null, lastTarget = '', receivedCount = 0, inviteLink = '';
-  let hostedHtml = null, hostedName = '', pendingHash = location.hash.slice(1);
+  const hosted = new Map(); // path -> File, e.g. "index.html", "img/cat.png"
+  let pendingHash = location.hash.slice(1);
   const incoming = {};
 
   const fmt = n => {
@@ -288,13 +292,18 @@
       setLoading(null);
       $('nameInput').value = id.startsWith('ps-') ? display(id) : '';
       $('addrNote').textContent = 'Your address is peer://' + display(id) + '. Anyone can visit it while this page is open.';
+      renderHosted();
       setStatus('Ready at peer://' + display(id) + '. Enter an address in the bar, or share your link.', 'ok');
 
       const target = pendingHash; pendingHash = '';
       if (target) navigate(target);
     });
     peer.on('connection', c => {
-      if (conn && conn.open) { c.close(); return; }
+      if (conn && conn.open) {
+        // Busy with another peer: still serve website requests from extra visitors
+        c.on('data', m => { if (m && (m.type === 'get' || m.type === 'visit')) onData(m, c); });
+        return;
+      }
       setupConn(c);
     });
     peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
@@ -347,7 +356,7 @@
       setLoading(null);
       setStatus('Connected to peer://' + display(c.peer), 'ok');
     });
-    c.on('data', onData);
+    c.on('data', m => onData(m, c));
     c.on('close', () => {
       if (conn !== c) return;
       conn = null;
@@ -405,15 +414,13 @@
   }
 
   // ---------- Receiving ----------
-  function onData(msg) {
+  function onData(msg, c) {
     if (!msg || !msg.type) return;
 
-    // Website hosting: a visitor asks for the page, the host replies with it
-    if (msg.type === 'visit') {
-      if (hostedHtml !== null) conn.send({ type: 'page', name: hostedName, html: hostedHtml });
-      else conn.send({ type: 'nopage' });
-      return;
-    }
+    // Website hosting. 'get' = a browser asks for one file by path (vav4.3);
+    // 'visit' = older clients ask for just the home page.
+    if (msg.type === 'get') { serveGet(c, msg); return; }
+    if (msg.type === 'visit') { serveVisit(c); return; }
     if (msg.type === 'page') {
       if (typeof msg.html === 'string') {
         openPage(msg.name || 'page.html', new Blob([msg.html], { type: 'text/html' }));
@@ -583,22 +590,113 @@
     restart();
   };
 
-  // Host a web page at your address
+  // ---------- Host a website (any number of files) ----------
+  const MIME = {
+    html: 'text/html', htm: 'text/html', css: 'text/css', js: 'text/javascript', mjs: 'text/javascript',
+    json: 'application/json', txt: 'text/plain', md: 'text/markdown', csv: 'text/csv', xml: 'application/xml',
+    svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+    webp: 'image/webp', ico: 'image/x-icon', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
+    mp4: 'video/mp4', webm: 'video/webm', pdf: 'application/pdf',
+    woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf'
+  };
+  const mimeOf = f => f.type || MIME[(f.name.split('.').pop() || '').toLowerCase()] || 'application/octet-stream';
+
+  // Clean a request path: drop ?query/#hash, decode %20 etc., resolve "." and "..", no leading slash
+  function normPath(p) {
+    p = String(p || '').split('#')[0].split('?')[0];
+    try { p = decodeURIComponent(p); } catch (e) {}
+    const out = [];
+    for (const seg of p.split('/')) {
+      if (!seg || seg === '.') continue;
+      if (seg === '..') out.pop(); else out.push(seg);
+    }
+    return out.join('/');
+  }
+  // Home page: index.html / index.htm, or the only .html file in the top level
+  function findIndex() {
+    for (const n of ['index.html', 'index.htm']) if (hosted.has(n)) return n;
+    const pages = [...hosted.keys()].filter(k => /\.html?$/i.test(k) && !k.includes('/'));
+    return pages.length === 1 ? pages[0] : null;
+  }
+  function lookup(path) {
+    if (path === '') { const i = findIndex(); return i ? { path: i, file: hosted.get(i) } : null; }
+    if (hosted.has(path)) return { path, file: hosted.get(path) };
+    for (const n of ['/index.html', '/index.htm']) if (hosted.has(path + n)) return { path: path + n, file: hosted.get(path + n) };
+    return null;
+  }
+  const escHtml = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  function listingHtml() {
+    const rows = [...hosted.keys()].sort().map(k =>
+      '<li><a href="' + escHtml(k.split('/').map(encodeURIComponent).join('/')) + '">' + escHtml(k) + '</a></li>').join('');
+    return '<!doctype html><meta charset="utf-8"><title>Files</title>'
+      + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:40px auto;padding:0 16px"><h1>Files</h1><ul>' + rows + '</ul></body>';
+  }
+
+  async function serveGet(c, msg) {
+    if (!c || !c.open) return;
+    const path = normPath(msg.path);
+    const hit = lookup(path);
+    try {
+      if (hit) {
+        const data = await hit.file.arrayBuffer();
+        c.send({ type: 'file', id: msg.id, path: '/' + hit.path, mime: mimeOf(hit.file), data });
+      } else if (path === '' && hosted.size) {
+        c.send({ type: 'file', id: msg.id, path: '/', mime: 'text/html', data: new TextEncoder().encode(listingHtml()).buffer });
+      } else {
+        c.send({ type: 'nofile', id: msg.id, path: msg.path });
+      }
+    } catch (e) {
+      c.send({ type: 'nofile', id: msg.id, path: msg.path });
+    }
+  }
+  async function serveVisit(c) {
+    if (!c || !c.open) return;
+    const hit = lookup('');
+    if (hit) c.send({ type: 'page', name: hit.path, html: await hit.file.text() });
+    else if (hosted.size) c.send({ type: 'page', name: 'files', html: listingHtml() });
+    else c.send({ type: 'nopage' });
+  }
+
+  function renderHosted() {
+    const list = $('hostList');
+    list.innerHTML = '';
+    const idx = findIndex();
+    [...hosted.keys()].sort().forEach(k => {
+      const f = hosted.get(k);
+      const li = document.createElement('li');
+      li.innerHTML = '<div class="name"></div><div class="meta"></div>';
+      li.querySelector('.name').textContent = '/' + k + (k === idx ? '  (home page)' : '');
+      const meta = li.querySelector('.meta');
+      meta.textContent = fmt(f.size) + ' · ';
+      const rm = document.createElement('a');
+      rm.className = 'dl'; rm.href = '#'; rm.textContent = 'Remove';
+      rm.onclick = e => { e.preventDefault(); hosted.delete(k); renderHosted(); };
+      meta.appendChild(rm);
+      list.appendChild(li);
+    });
+    $('unhostBtn').disabled = hosted.size === 0;
+    const where = 'peer://' + display(peer && peer.id ? peer.id : '…');
+    $('hostInfo').textContent = hosted.size
+      ? 'Hosting ' + hosted.size + ' file' + (hosted.size > 1 ? 's' : '') + ' at ' + where
+        + (idx ? '' : '. There is no index.html, so visitors will see a list of your files')
+        + '. This works while this page stays open.'
+      : '';
+  }
+
+  function addHostFiles(files, fromFolder) {
+    for (const f of files) {
+      let path = f.name;
+      if (fromFolder && f.webkitRelativePath) path = f.webkitRelativePath.split('/').slice(1).join('/') || f.name;
+      path = path.split('/').filter(s => s && s !== '.' && s !== '..').join('/');
+      if (path) hosted.set(path, f);
+    }
+    renderHosted();
+  }
   $('hostBtn').onclick = () => $('hostInput').click();
-  $('hostInput').onchange = async () => {
-    const f = $('hostInput').files[0];
-    $('hostInput').value = '';
-    if (!f) return;
-    hostedHtml = await f.text();
-    hostedName = f.name;
-    $('unhostBtn').disabled = false;
-    $('hostInfo').textContent = 'Hosting ' + f.name + ' at peer://' + display(peer.id) + ' while this page stays open.';
-  };
-  $('unhostBtn').onclick = () => {
-    hostedHtml = null; hostedName = '';
-    $('unhostBtn').disabled = true;
-    $('hostInfo').textContent = '';
-  };
+  $('hostFolderBtn').onclick = () => $('hostFolderInput').click();
+  $('hostInput').onchange = () => { addHostFiles([...$('hostInput').files], false); $('hostInput').value = ''; };
+  $('hostFolderInput').onchange = () => { addHostFiles([...$('hostFolderInput').files], true); $('hostFolderInput').value = ''; };
+  $('unhostBtn').onclick = () => { hosted.clear(); renderHosted(); };
 
   drop.onclick = () => fileInput.click();
   fileInput.onchange = () => { sendFiles([...fileInput.files]); fileInput.value = ''; };
