@@ -146,6 +146,11 @@ button { -webkit-tap-highlight-color: transparent; }
 .overlay.err h1 { color:var(--err); }
 .overlay a.dl { display:inline-flex; margin-top:14px; padding:10px 16px; color:#fff; background:var(--accent-strong); border-radius:10px; text-decoration:none; font-weight:650; }
 .overlay a.dl:hover { filter:brightness(1.12); }
+.home { margin-top:20px; }
+.home .hh { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#71819d; margin:14px 0 8px; }
+.chips2 { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+.chips2 button { padding:6px 12px; color:#c9d7ff; background:#17243a; border:1px solid var(--border); border-radius:20px; cursor:pointer; font-size:12px; }
+.chips2 button:hover { border-color:var(--accent); }
 code { color:#c9d7ff; background:#202d45; padding:3px 7px; border-radius:6px; }
 .statusbar {
   min-height:32px; display:flex; gap:9px; align-items:center;
@@ -176,6 +181,28 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
   .address { order:2; flex-basis:100%; }
   .toggle { margin-left:auto; }
 }
+.ed { position:fixed; inset:0; z-index:50; display:none; flex-direction:column; background:var(--frame); color:var(--text); }
+.ed.show { display:flex; }
+.ed-top, .ed-bar { display:flex; gap:8px; align-items:center; padding:10px 14px; border-bottom:1px solid var(--border); background:#0e1727; flex-wrap:wrap; }
+.ed .grow { flex:1; }
+.ed input[type=password], .ed input[type=text] { height:34px; padding:0 10px; color:var(--text); background:var(--field); border:1px solid var(--border); border-radius:9px; min-width:160px; }
+.ed button { height:34px; padding:0 13px; color:#fff; background:var(--accent-strong); border:0; border-radius:9px; cursor:pointer; }
+.ed button.sec { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+.ed button.danger { background:#c8414f; }
+.ed button:disabled { opacity:.35; cursor:default; }
+.ed-body { flex:1; display:flex; min-height:0; }
+.ed-side { width:260px; flex:none; display:flex; flex-direction:column; border-right:1px solid var(--border); min-height:0; }
+.ed-actions { display:flex; gap:6px; padding:10px; }
+.ed-side ul { list-style:none; margin:0; padding:0 6px 10px; overflow:auto; flex:1; }
+.ed-side li { padding:6px 9px; border-radius:8px; cursor:pointer; font-size:13px; word-break:break-all; display:flex; justify-content:space-between; gap:8px; }
+.ed-side li small { color:var(--muted); flex:none; }
+.ed-side li:hover { background:rgba(255,255,255,.06); }
+.ed-side li.sel { background:rgba(124,156,255,.18); }
+.ed-main { flex:1; display:flex; flex-direction:column; min-width:0; }
+.ed-main textarea { flex:1; width:100%; resize:none; border:0; outline:0; padding:14px; color:var(--text); background:var(--field); font:13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size:2; white-space:pre; }
+#edMsg { padding:6px 14px; font-size:12px; color:var(--muted); border-top:1px solid var(--border); min-height:28px; }
+#edMsg.err { color:var(--err); } #edMsg.ok { color:var(--ok); }
+@media (max-width:700px) { .ed-body { flex-direction:column; } .ed-side { width:100%; max-height:38%; border-right:0; border-bottom:1px solid var(--border); } }
 </style>
 </head>
 <body>
@@ -190,6 +217,8 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
     <button class="icon-btn" id="backBtn" title="Back" aria-label="Go back" disabled>←</button>
     <button class="icon-btn" id="fwdBtn" title="Forward" aria-label="Go forward" disabled>→</button>
     <button class="icon-btn" id="reloadBtn" title="Reload" aria-label="Reload page" disabled>⟳</button>
+    <button class="icon-btn" id="editBtn" title="Remote edit this site's files" aria-label="Remote editor">✎</button>
+    <button class="icon-btn" id="starBtn" title="Bookmark this page" aria-label="Bookmark" disabled>☆</button>
     <div class="address">
       <span class="lock" id="lock">🔓</span>
       <input type="text" id="address" placeholder="Enter a peer:// address and press Enter" autocomplete="off" spellcheck="false">
@@ -202,6 +231,29 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
   <div class="page" id="page"></div>
 
   <div class="statusbar"><span class="dot wait" id="dot"></span><span class="grow" id="status">Starting up…</span><span>Only peer:// addresses are loaded</span></div>
+</div>
+
+<div class="ed" id="ed">
+  <div class="ed-top">
+    <strong>Remote editor</strong><span id="edHost" style="color:var(--muted)"></span>
+    <input type="password" id="edPw" placeholder="Edit password" autocomplete="off">
+    <button id="edConnect">Connect</button>
+    <span class="grow"></span>
+    <button class="sec" id="edClose">Close</button>
+  </div>
+  <div class="ed-body">
+    <div class="ed-side">
+      <div class="ed-actions"><button class="sec" id="edNew" disabled>New file</button><button class="sec" id="edUpload" disabled>Upload</button><button class="sec" id="edRefresh" disabled>⟳</button></div>
+      <input type="file" id="edUpInput" multiple hidden>
+      <ul id="edList"></ul>
+    </div>
+    <div class="ed-main">
+      <div class="ed-bar"><span id="edName" style="color:var(--muted)">No file selected</span><span class="grow"></span>
+        <button id="edSave" disabled>Save</button><button class="sec" id="edRename" disabled>Rename</button><button class="danger" id="edDelete" disabled>Delete</button></div>
+      <textarea id="edText" spellcheck="false" disabled placeholder="Connect, then pick a file to edit."></textarea>
+      <div id="edMsg"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -241,7 +293,7 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
     if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//')) return null;
     try {
       const u = new URL(href, 'http://x' + base.path + base.query);
-      return { host: base.host, path: decodeURI(u.pathname) === u.pathname ? u.pathname : u.pathname, query: u.search, hash: u.hash };
+      return { host: base.host, path: u.pathname, query: u.search, hash: u.hash };
     } catch (e) { return null; }
   }
 
@@ -252,11 +304,51 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
   let peer = null, myId = null;
   const conns = new Map(), connecting = new Map(), pending = new Map();
   let reqN = 0;
-  const ready = new Promise(resolveReady => {
-    peer = new Peer();
-    peer.on('open', id => { myId = id; $('myIdChip').textContent = 'Online'; resolveReady(); setStatus('Ready. Enter a peer:// address.', 'ok'); });
+  // A stable ID is generated once and kept in localStorage, so this browser
+  // comes back with the same peer ID every time it's opened.
+  const ID_KEY = 'pbPeerId';
+  const makeId = () => {
+    const a = new Uint8Array(12); crypto.getRandomValues(a);
+    return 'pb-' + [...a].map(b => b.toString(36).padStart(2, '0')).join('');
+  };
+  let persistentId = null;
+  try { persistentId = localStorage.getItem(ID_KEY); } catch (e) {}
+  if (!persistentId || !/^[A-Za-z0-9][A-Za-z0-9_-]*[A-Za-z0-9]$/.test(persistentId)) {
+    persistentId = makeId();
+    try { localStorage.setItem(ID_KEY, persistentId); } catch (e) {}
+  }
+
+  let resolveReady;
+  const ready = new Promise(r => { resolveReady = r; });
+  let idAttempts = 0;
+
+  function startPeer(id) {
+    peer = id ? new Peer(id) : new Peer();
+    peer.on('open', openId => {
+      myId = openId;
+      const chip = $('myIdChip');
+      chip.textContent = 'Online';
+      chip.title = 'Your peer ID: ' + openId + (id ? '' : ' (temporary)');
+      resolveReady();
+      setStatus('Ready. Enter a peer:// address.', 'ok');
+    });
     peer.on('disconnected', () => { $('myIdChip').textContent = 'Reconnecting…'; try { peer.reconnect(); } catch (e) {} });
     peer.on('error', err => {
+      if (err.type === 'unavailable-id') {
+        // Either the server hasn't released our ID since the last visit yet,
+        // or another tab is already using it. Retry a few times, then fall back
+        // to a temporary random ID (the saved ID is left untouched).
+        try { peer.destroy(); } catch (e) {}
+        if (id && ++idAttempts <= 4) {
+          $('myIdChip').textContent = 'Reclaiming ID…';
+          setStatus('Reclaiming your peer ID…', 'wait');
+          setTimeout(() => startPeer(id), 2500);
+        } else {
+          setStatus('Your saved ID is in use (another tab?). Using a temporary ID.', 'wait');
+          startPeer(null);
+        }
+        return;
+      }
       if (err.type === 'peer-unavailable') {
         for (const [pid, c] of connecting) {
           if (String(err.message).includes(pid)) c.reject(new Error('Nobody is online at peer://' + displayId(pid) + '.'));
@@ -266,12 +358,18 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
       $('myIdChip').textContent = 'Error';
       setStatus('Peer error: ' + (err.type || err.message), 'err');
     });
-  });
+  }
+  startPeer(persistentId);
 
   function failPending(pid, msg) {
     for (const [id, p] of pending) if (p.peerId === pid) { clearTimeout(p.timer); pending.delete(id); p.reject(new Error(msg)); }
   }
   function onData(msg) {
+    if (msg && msg.type === 'editres') {
+      const q = pending.get(msg.id); if (!q) return;
+      clearTimeout(q.timer); pending.delete(msg.id);
+      return q.resolve(msg);
+    }
     if (!msg || (msg.type !== 'file' && msg.type !== 'nofile')) return;
     const p = pending.get(msg.id); if (!p) return;
     clearTimeout(p.timer); pending.delete(msg.id);
@@ -304,13 +402,27 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
       const id = ++reqN;
       const timer = setTimeout(() => { pending.delete(id); rejectF(new Error('The peer did not respond in time.')); }, REQ_TIMEOUT);
       pending.set(id, { resolve: resolveF, reject: rejectF, timer, peerId: conn.peer });
-      try { conn.send({ type: 'get', id, path: u.path }); }
+      try { conn.send({ type: 'get', id, path: u.path, query: u.query || '', method: u.method || 'GET', body: u.body || '' }); }
       catch (e) { clearTimeout(timer); pending.delete(id); rejectF(e); }
     });
   }
 
   // ---------- Tabs ----------
   const tabs = []; let active = null, tabN = 0;
+  const store = {
+    get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+  let bookmarks = store.get('pbBookmarks', []), recent = store.get('pbRecent', []);
+  const bmKey = u => 'peer://' + u.host + u.path;
+  const saveSession = () => store.set('pbTabs', tabs.map(o => o.url && !o.url.method ? fmt(o.url) : null).filter(Boolean).slice(0, 8));
+  function rememberPage(u) {
+    if (!u || u.method) return;
+    const k = bmKey(u);
+    recent = [k, ...recent.filter(x => x !== k)].slice(0, 8);
+    store.set('pbRecent', recent);
+    saveSession();
+  }
   const scriptsOn = () => $('scriptsToggle').checked;
 
   function newTab(url) {
@@ -344,7 +456,7 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
   }
   function closeTab(t) {
     const i = tabs.indexOf(t);
-    t.token++; t.btn.remove(); t.view.remove(); tabs.splice(i, 1);
+    t.token++; t.btn.remove(); t.view.remove(); tabs.splice(i, 1); saveSession();
     if (!tabs.length) return newTab();
     if (active === t) activate(tabs[Math.min(i, tabs.length - 1)]);
   }
@@ -355,8 +467,38 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
     $('backBtn').disabled = t.idx <= 0;
     $('fwdBtn').disabled = t.idx >= t.hist.length - 1;
     $('reloadBtn').disabled = !t.url;
+    const on = !!t.url && bookmarks.includes(bmKey(t.url));
+    $('starBtn').disabled = !t.url;
+    $('starBtn').textContent = on ? '★' : '☆';
+    $('starBtn').title = on ? 'Remove bookmark' : 'Bookmark this page';
   }
+  $('starBtn').onclick = () => {
+    const t = active; if (!t || !t.url) return;
+    const k = bmKey(t.url);
+    bookmarks = bookmarks.includes(k) ? bookmarks.filter(x => x !== k) : [k, ...bookmarks].slice(0, 30);
+    store.set('pbBookmarks', bookmarks);
+    refreshUI();
+    setStatus(bookmarks.includes(k) ? 'Bookmarked ' + k : 'Bookmark removed.', 'ok');
+  };
   function setTitle(t, title) { t.title = title; t.label.textContent = '🌐 ' + title; t.btn.title = title; }
+
+  // Bookmarks and recent pages shown on the new-tab page
+  function homeLists(t) {
+    const wrap = document.createElement('div'); wrap.className = 'home';
+    const add = (title, items) => {
+      if (!items.length) return;
+      const h = document.createElement('p'); h.className = 'hh'; h.textContent = title; wrap.appendChild(h);
+      const row = document.createElement('div'); row.className = 'chips2';
+      items.forEach(u => {
+        const btn = document.createElement('button'); btn.textContent = u.replace(/^peer:\/\//, '');
+        btn.onclick = () => go(t, u); row.appendChild(btn);
+      });
+      wrap.appendChild(row);
+    };
+    add('Bookmarks', bookmarks);
+    add('Recent', recent.filter(u => !bookmarks.includes(u)));
+    return wrap;
+  }
 
   // ---------- Overlay messages inside a tab ----------
   function overlay(t, title, msg, kind, node) {
@@ -367,6 +509,7 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
       box.insertAdjacentHTML('beforeend',
         '<p>This browser only opens <b>peer://</b> addresses.</p>' +
         '<p>Try <code>peer://website.peer/</code> or a site hosted with Peer Share.</p>');
+      box.appendChild(homeLists(t));
     } else if (msg) { const p = document.createElement('p'); p.textContent = msg; box.appendChild(p); }
     if (node) box.appendChild(node);
     o.appendChild(box);
@@ -375,6 +518,8 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
 
   // ---------- Navigation ----------
   function go(t, raw) {
+    const fm = /^(?:peer:\/\/)?files?\.([a-z0-9.-]+\.peer)\/?$/i.exec(String(raw || '').trim());
+    if (fm && isName(fm[1].toLowerCase())) raw = 'peer://' + fm[1].toLowerCase() + '/__files';
     const u = parsePeerUrl(raw);
     if (!u) {
       overlay(t, 'Blocked', 'Only peer://<name>/<path> addresses are allowed. http, https, file and every other scheme are never loaded.', 'err');
@@ -401,6 +546,7 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
         await render(t, u, res, token);
         if (token !== t.token) return;
         setStatus('Loaded ' + fmt(u), 'ok');
+        rememberPage(u);
       }
     } catch (e) {
       if (token !== t.token) return;
@@ -411,11 +557,15 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
       refreshUI();
     }
   }
-  function handleNav(t, href, query) {
+  function handleNav(t, href, query, method) {
     if (!t.url) return;
     const target = resolve(href === '' ? t.url.path : href, t.url);
     if (!target) { setStatus('Blocked: that link is not a peer:// address.', 'err'); return; }
-    if (typeof query === 'string') { target.query = query ? '?' + query : ''; target.hash = ''; }
+    if (typeof query === 'string') {
+      if (String(method).toLowerCase() === 'post') { target.method = 'POST'; target.body = query; }
+      else target.query = query ? '?' + query : '';
+      target.hash = '';
+    }
     load(t, target);
   }
   $('backBtn').onclick = () => { const t = active; if (t && t.idx > 0) { t.idx--; load(t, t.hist[t.idx], true); } };
@@ -478,18 +628,18 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
       d.addEventListener('submit', e => {
         e.preventDefault();
         const f = e.target;
-        handleNav(t, f.getAttribute('action') || '', new URLSearchParams(new FormData(f)).toString());
+        handleNav(t, f.getAttribute('action') || '', new URLSearchParams(new FormData(f)).toString(), f.getAttribute('method'));
       }, true);
     };
     t.frame.srcdoc = '<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="' + csp + '">' + nav + (extraHead || '') + '</head>' + bodyHtml + '</html>';
   }
   // Runs inside the sandboxed page (scripts mode): sends link clicks and form submits to the browser.
   const NAV_SCRIPT = "document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href]');if(!a)return;var h=a.getAttribute('href');if(h.charAt(0)==='#')return;e.preventDefault();parent.postMessage({peerNav:h},'*');},true);"
-    + "document.addEventListener('submit',function(e){e.preventDefault();var f=e.target;parent.postMessage({peerNav:f.getAttribute('action')||'',form:new URLSearchParams(new FormData(f)).toString()},'*');},true);";
+    + "document.addEventListener('submit',function(e){e.preventDefault();var f=e.target;parent.postMessage({peerNav:f.getAttribute('action')||'',form:new URLSearchParams(new FormData(f)).toString(),method:f.getAttribute('method')||''},'*');},true);";
   window.addEventListener('message', e => {
     const t = tabs.find(o => o.frame.contentWindow === e.source);
     if (!t || !e.data || typeof e.data.peerNav !== 'string') return;
-    handleNav(t, e.data.peerNav, typeof e.data.form === 'string' ? e.data.form : undefined);
+    handleNav(t, e.data.peerNav, typeof e.data.form === 'string' ? e.data.form : undefined, e.data.method);
   });
 
   async function renderHtml(t, u, res, token) {
@@ -576,8 +726,138 @@ button:focus-visible, input:focus-visible { outline:2px solid var(--accent); out
     showDoc(t, doc.body.outerHTML, withScripts, doc.head.innerHTML);
   }
 
+  // ---------- Remote editor ----------
+  // Talks to Peer Share's {type:'edit', op, password, ...} -> {type:'editres', ok, ...}
+  const ed = { host: null, pw: '', files: [], cur: null, text: false };
+  const TEXT_RE = /\.(html?|css|js|mjs|json|txt|md|csv|xml|svg|php|ts|yml|yaml|ini|log)$/i;
+  const edMsg = (m, k) => { $('edMsg').textContent = m; $('edMsg').className = k || ''; };
+  const edCall = async (op, extra) => {
+    await ready;
+    const conn = await getConn(toPeerId(ed.host));
+    const r = await new Promise((res, rej) => {
+      const id = ++reqN;
+      const timer = setTimeout(() => { pending.delete(id); rej(new Error('The peer did not respond in time.')); }, REQ_TIMEOUT);
+      pending.set(id, { resolve: res, reject: rej, timer, peerId: conn.peer });
+      try { conn.send(Object.assign({ type: 'edit', id, op, password: ed.pw }, extra || {})); }
+      catch (e) { clearTimeout(timer); pending.delete(id); rej(e); }
+    });
+    if (!r.ok) throw new Error(r.error || 'Request failed.');
+    return r;
+  };
+  const edEnable = on => ['edNew', 'edUpload', 'edRefresh'].forEach(i => $(i).disabled = !on);
+  function edSelect(path) {
+    ed.cur = path;
+    [...$('edList').children].forEach(li => li.classList.toggle('sel', li.dataset.path === path));
+    ['edSave', 'edRename', 'edDelete'].forEach(i => $(i).disabled = !path);
+  }
+  function edRenderList() {
+    const ul = $('edList'); ul.innerHTML = '';
+    ed.files.forEach(f => {
+      const li = document.createElement('li'); li.dataset.path = f.path;
+      const a = document.createElement('span'); a.textContent = f.path;
+      const b = document.createElement('small'); b.textContent = f.size < 1024 ? f.size + ' B' : (f.size / 1024).toFixed(1) + ' KB';
+      li.append(a, b); li.onclick = () => edOpen(f.path);
+      ul.appendChild(li);
+    });
+    edSelect(ed.cur && ed.files.some(f => f.path === ed.cur) ? ed.cur : null);
+  }
+  async function edRefresh() {
+    const r = await edCall('list'); ed.files = r.files || []; edRenderList();
+  }
+  async function edOpen(path) {
+    try {
+      edMsg('Opening ' + path + '…');
+      const r = await edCall('read', { path });
+      const bytes = new Uint8Array(r.data);
+      edSelect(path); $('edName').textContent = '/' + path;
+      const ta = $('edText');
+      if (TEXT_RE.test(path) || /^text\//.test(r.mime || '')) {
+        ed.text = true; ta.disabled = false; ta.value = dec(bytes); $('edSave').disabled = false;
+        edMsg('Opened ' + path, 'ok');
+      } else {
+        ed.text = false; ta.disabled = true; ta.value = '(Binary file: ' + (r.mime || 'unknown type') + '. Use Upload to replace it, Rename or Delete.)';
+        $('edSave').disabled = true;
+        edMsg('Binary file, cannot be edited as text.');
+      }
+    } catch (e) { edMsg(e.message, 'err'); }
+  }
+  function edReloadTab(path) {
+    const t = active;
+    if (t && t.url && t.url.host === ed.host && t.url.path.replace(/^\//, '') === path) load(t, t.url, true);
+  }
+  async function edConnect() {
+    ed.pw = $('edPw').value;
+    if (!ed.pw) return edMsg('Enter the edit password.', 'err');
+    try {
+      edMsg('Connecting…');
+      await edCall('auth'); await edRefresh();
+      edEnable(true); edMsg('Connected. Pick a file.', 'ok');
+    } catch (e) { edEnable(false); edMsg(e.message, 'err'); }
+  }
+  async function edSave() {
+    if (!ed.cur || !ed.text) return;
+    try {
+      const data = new TextEncoder().encode($('edText').value).buffer;
+      await edCall('write', { path: ed.cur, data });
+      edMsg('Saved ' + ed.cur + ' (' + new Date().toLocaleTimeString() + ')', 'ok');
+      await edRefresh(); edReloadTab(ed.cur);
+    } catch (e) { edMsg(e.message, 'err'); }
+  }
+  function openEditor() {
+    let host = active && active.url ? active.url.host : null;
+    if (!host) {
+      const u = parsePeerUrl(prompt('Peer address to edit (e.g. peer://website.peer)') || '');
+      if (!u) return;
+      host = u.host;
+    }
+    if (host !== ed.host) {
+      ed.host = host; ed.cur = null; ed.files = []; ed.pw = ''; $('edPw').value = '';
+      $('edList').innerHTML = ''; $('edText').value = ''; $('edText').disabled = true;
+      $('edName').textContent = 'No file selected'; edEnable(false); edSelect(null); edMsg('');
+    }
+    $('edHost').textContent = 'peer://' + host;
+    $('ed').classList.add('show'); $('edPw').focus();
+  }
+  $('editBtn').onclick = openEditor;
+  $('edClose').onclick = () => $('ed').classList.remove('show');
+  $('edConnect').onclick = edConnect;
+  $('edPw').addEventListener('keydown', e => { if (e.key === 'Enter') edConnect(); });
+  $('edRefresh').onclick = () => edRefresh().then(() => edMsg('Refreshed.', 'ok')).catch(e => edMsg(e.message, 'err'));
+  $('edSave').onclick = edSave;
+  $('edText').addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); edSave(); } });
+  $('edNew').onclick = async () => {
+    const name = (prompt('New file path (e.g. about.html or css/site.css)') || '').trim();
+    if (!name) return;
+    try { await edCall('write', { path: name, data: new ArrayBuffer(0) }); await edRefresh(); await edOpen(name.replace(/^\/+/, '')); }
+    catch (e) { edMsg(e.message, 'err'); }
+  };
+  $('edUpload').onclick = () => $('edUpInput').click();
+  $('edUpInput').onchange = async () => {
+    const files = [...$('edUpInput').files]; $('edUpInput').value = '';
+    try {
+      for (const f of files) { edMsg('Uploading ' + f.name + '…'); await edCall('write', { path: f.name, data: await f.arrayBuffer() }); edReloadTab(f.name); }
+      await edRefresh(); edMsg('Uploaded ' + files.length + ' file(s).', 'ok');
+    } catch (e) { edMsg(e.message, 'err'); }
+  };
+  $('edRename').onclick = async () => {
+    if (!ed.cur) return;
+    const to = (prompt('Rename to:', ed.cur) || '').trim();
+    if (!to || to === ed.cur) return;
+    try { const r = await edCall('rename', { path: ed.cur, to }); ed.cur = r.path; await edRefresh(); edSelect(r.path); $('edName').textContent = '/' + r.path; edMsg('Renamed.', 'ok'); }
+    catch (e) { edMsg(e.message, 'err'); }
+  };
+  $('edDelete').onclick = async () => {
+    if (!ed.cur || !confirm('Delete ' + ed.cur + ' from the host?')) return;
+    try {
+      await edCall('delete', { path: ed.cur });
+      ed.cur = null; $('edText').value = ''; $('edText').disabled = true; $('edName').textContent = 'No file selected';
+      await edRefresh(); edMsg('Deleted.', 'ok');
+    } catch (e) { edMsg(e.message, 'err'); }
+  };
+
   // ---------- Start ----------
-  newTab();
+  const saved = store.get('pbTabs', []);
+  if (saved.length) saved.slice(0, 8).forEach(u => newTab(u)); else newTab();
 })();
 </script>
 </body>
