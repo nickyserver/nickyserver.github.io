@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Peer Share</title>
+<title>Peer Server</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
   :root {
@@ -123,6 +123,22 @@
   .how { color: var(--muted); padding-left: 20px; }
   .how li { background: none; border: 0; padding: 2px 0; display: list-item; list-style: decimal; }
 
+  /* Server panel */
+  .srv { border: 1px solid var(--border); background: var(--card); border-radius: 12px; padding: 14px; display: grid; gap: 14px; }
+  .srv-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .srv-top .grow { flex: 1; }
+  .srv button { padding: 8px 14px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
+  .srv button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .srv code { font-size: 14px; word-break: break-all; }
+  .pill { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 12px; color: #fff; background: var(--muted); }
+  .pill.ok { background: var(--ok); } .pill.err { background: var(--err); } .pill.wait { background: #f59e0b; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+  .stats div { background: var(--page); border: 1px solid var(--border); border-radius: 8px; padding: 8px 4px; }
+  .stats b { display: block; font-size: 1.25rem; }
+  .stats span { font-size: .75rem; color: var(--muted); }
+  .toggle { font-size: .85rem; color: var(--muted); display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  @media (max-width: 560px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+
   /* Status bar */
   .statusbar {
     display: flex; gap: 8px; align-items: center; padding: 4px 14px; font-size: 12px; color: var(--muted);
@@ -143,7 +159,8 @@
   <div class="titlebar">
     <div class="lights"><i></i><i></i><i></i></div>
     <div class="tabs">
-      <button class="tab active" data-tab="share">📤 Share</button>
+      <button class="tab active" data-tab="server">🖥 Server</button>
+      <button class="tab" data-tab="share">📤 Send files</button>
       <button class="tab" data-tab="downloads">📥 Downloads <span class="badge" id="badge">0</span></button>
     </div>
   </div>
@@ -163,15 +180,51 @@
 
   <div class="page">
     <!-- SHARE TAB -->
-    <div class="view active" id="view-share">
-      <h1>Peer Share</h1>
-      <p class="sub">Send files directly between two browsers. Nothing is uploaded to a server.</p>
+    <div class="view active" id="view-server">
+      <h1>Peer Server</h1>
+      <p class="sub">Run a website from this browser tab. Visitors open it with a peer:// browser. Nothing is uploaded to anyone else's server.</p>
+      <div class="srv">
+        <div class="srv-top">
+          <span class="pill wait" id="srvPill">Connecting…</span>
+          <code id="srvAddr">…</code>
+          <button class="secondary" id="srvCopy">Copy</button>
+          <span class="grow"></span>
+          <button id="serverBtn">Stop server</button>
+        </div>
+        <div class="stats">
+          <div><b id="srvReqs">0</b><span>requests</span></div>
+          <div><b id="srvVisitors">0</b><span>online now</span></div>
+          <div><b id="srvUp">-</b><span>uptime</span></div>
+          <div><b id="srvFiles">0</b><span>files</span></div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="wakeToggle" checked> Keep this device awake while serving</label>
+      </div>
+      <h2>Connected now <span id="liveCount"></span></h2>
+      <ul id="liveList"><li class="empty">Nobody is connected right now.</li></ul>
 
-      <div class="drop disabled" id="drop">Connect to a peer to start sending.<br>Then drop files here or click to choose.</div>
-      <input type="file" id="fileInput" multiple hidden>
+      <h2>Banned <span id="banCount"></span></h2>
+      <div class="linkrow">
+        <input type="text" id="banInput" placeholder="Peer ID or name.peer to ban" spellcheck="false" autocomplete="off">
+        <button id="banBtn">Ban</button>
+      </div>
+      <ul id="banList" style="margin-top:12px"><li class="empty">No one is banned.</li></ul>
+      <div class="note">Banned peers are disconnected and ignored whenever they reconnect. Bans are saved in this browser until you unban. Visitors who haven't claimed a name get a new random ID when they reload, so a ban only holds for the same ID.</div>
 
-      <h2>Sent</h2>
-      <ul id="outgoing"><li class="empty">Nothing sent yet.</li></ul>
+      <h2>Site files</h2>
+      <div class="linkrow">
+        <button class="secondary" id="hostBtn">Add files…</button>
+        <button class="secondary" id="hostFolderBtn">Add folder…</button>
+        <button class="secondary" id="unhostBtn" disabled>Remove all</button>
+        <button class="secondary" id="copyAddr">Copy site address</button>
+      </div>
+      <input type="file" id="hostInput" multiple hidden>
+      <input type="file" id="hostFolderInput" webkitdirectory multiple hidden>
+      <ul id="hostList" style="margin-top:12px"></ul>
+      <div class="note" id="hostInfo"></div>
+      <div class="note">Add pages, images, styles, scripts, <b>.php files</b> (run in your browser with PHP WebAssembly; visitors get the output, and $_GET / $_POST work) or any other files. Visitors using a peer:// browser (like vav4.3) can open any of them at peer://yourname.peer/filename, and links between your pages work. Your site is saved in this browser, so it comes back after a reload. Add a <b>404.html</b> to customise the not-found page. The server only runs while this tab stays open.</div>
+
+      <h2>Activity</h2>
+      <ul id="logList"><li class="empty">No visitors yet.</li></ul>
 
       <h2>Your address</h2>
       <div class="linkrow">
@@ -182,17 +235,14 @@
       <div class="note" id="addrNote"></div>
       <div class="note">Names are first come, first served and only work while your page is open. If someone else is using a name, you'll get a random ID instead.</div>
 
-      <h2>Host a website</h2>
+      <h2>Remote editing</h2>
       <div class="linkrow">
-        <button class="secondary" id="hostBtn">Add files…</button>
-        <button class="secondary" id="hostFolderBtn">Add folder…</button>
-        <button class="secondary" id="unhostBtn" disabled>Remove all</button>
+        <input type="password" id="editPass" placeholder="Set an edit password" autocomplete="new-password" spellcheck="false">
+        <button id="editOnBtn">Enable</button>
+        <button class="secondary" id="editOffBtn" disabled>Disable</button>
       </div>
-      <input type="file" id="hostInput" multiple hidden>
-      <input type="file" id="hostFolderInput" webkitdirectory multiple hidden>
-      <ul id="hostList" style="margin-top:12px"></ul>
-      <div class="note" id="hostInfo"></div>
-      <div class="note">Add pages, images, styles, scripts or any other files. Visitors using a peer:// browser (like vav4.3) can open any of them at peer://yourname.peer/filename, and links between your pages work. Files stay on your computer and are only sent when someone asks for them. Peer Share's own tabs only show your home page.</div>
+      <div class="note" id="editNote">Remote editing is off.</div>
+      <div class="note">When on, anyone who knows this password can list, read, create, change, rename and delete your hosted files from Peer Browser (the ✎ button). Pick a strong password and share it only with people you trust. The password is kept in memory only, so it resets when you close this page. Edits replace the in-memory copy that is being hosted; your original files on disk are not touched.</div>
 
       <h2>Your invite link</h2>
       <div class="linkrow">
@@ -208,6 +258,20 @@
         <li>They open it and connect automatically. Or paste their ID into the address bar and press Enter.</li>
       </ul>
       <div class="note" id="linkNote"></div>
+    
+    </div>
+
+    <!-- SEND FILES TAB -->
+    <div class="view" id="view-share">
+      <h1>Send files</h1>
+      <p class="sub">Send files directly to another browser. Connect using the address bar above.</p>
+      <div class="drop disabled" id="drop">Connect to a peer to start sending.<br>Then drop files here or click to choose.</div>
+      <input type="file" id="fileInput" multiple hidden>
+
+      <h2>Sent</h2>
+      <ul id="outgoing"><li class="empty">Nothing sent yet.</li></ul>
+
+      
     </div>
 
     <!-- DOWNLOADS TAB -->
@@ -273,6 +337,7 @@
 
   // ---------- Peer setup ----------
   function init(customId) {
+    live.clear();
     peer = customId ? new Peer(customId) : new Peer();
     peer.on('open', id => {
       $('myIdChip').textContent = 'You: ' + display(id);
@@ -299,9 +364,16 @@
       if (target) navigate(target);
     });
     peer.on('connection', c => {
+      if (banned.has(c.peer)) {
+        const kill = () => { try { c.close(); } catch (e) {} };
+        if (c.open) kill(); else c.on('open', kill);
+        c.on('data', kill);
+        return;
+      }
+      trackConn(c);
       if (conn && conn.open) {
         // Busy with another peer: still serve website requests from extra visitors
-        c.on('data', m => { if (m && (m.type === 'get' || m.type === 'visit')) onData(m, c); });
+        c.on('data', m => { if (m && (m.type === 'get' || m.type === 'visit' || m.type === 'edit')) onData(m, c); });
         return;
       }
       setupConn(c);
@@ -331,7 +403,7 @@
     const id = parseTarget(text);
     if (!id || !peer) return;
     if (id === peer.id) return setStatus("That's your own ID.", 'err');
-    if (conn) { conn.off && conn.close(); }
+    if (conn) { try { conn.close(); } catch (e) {} }
     lastTarget = id;
     address.value = 'peer://' + display(id);
     setStatus('Connecting to peer://' + display(id) + '…', 'wait');
@@ -416,11 +488,13 @@
   // ---------- Receiving ----------
   function onData(msg, c) {
     if (!msg || !msg.type) return;
+    if (c && banned.has(c.peer)) { try { c.close(); } catch (e) {} return; }
 
     // Website hosting. 'get' = a browser asks for one file by path (vav4.3);
     // 'visit' = older clients ask for just the home page.
     if (msg.type === 'get') { serveGet(c, msg); return; }
     if (msg.type === 'visit') { serveVisit(c); return; }
+    if (msg.type === 'edit') { serveEdit(c, msg); return; }
     if (msg.type === 'page') {
       if (typeof msg.html === 'string') {
         openPage(msg.name || 'page.html', new Blob([msg.html], { type: 'text/html' }));
@@ -597,7 +671,7 @@
     svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
     webp: 'image/webp', ico: 'image/x-icon', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
     mp4: 'video/mp4', webm: 'video/webm', pdf: 'application/pdf',
-    woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf'
+    php: 'text/x-php', woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf'
   };
   const mimeOf = f => f.type || MIME[(f.name.split('.').pop() || '').toLowerCase()] || 'application/octet-stream';
 
@@ -614,14 +688,14 @@
   }
   // Home page: index.html / index.htm, or the only .html file in the top level
   function findIndex() {
-    for (const n of ['index.html', 'index.htm']) if (hosted.has(n)) return n;
-    const pages = [...hosted.keys()].filter(k => /\.html?$/i.test(k) && !k.includes('/'));
+    for (const n of ['index.php', 'index.html', 'index.htm']) if (hosted.has(n)) return n;
+    const pages = [...hosted.keys()].filter(k => /\.(html?|php)$/i.test(k) && !k.includes('/'));
     return pages.length === 1 ? pages[0] : null;
   }
   function lookup(path) {
     if (path === '') { const i = findIndex(); return i ? { path: i, file: hosted.get(i) } : null; }
     if (hosted.has(path)) return { path, file: hosted.get(path) };
-    for (const n of ['/index.html', '/index.htm']) if (hosted.has(path + n)) return { path: path + n, file: hosted.get(path + n) };
+    for (const n of ['/index.php', '/index.html', '/index.htm']) if (hosted.has(path + n)) return { path: path + n, file: hosted.get(path + n) };
     return null;
   }
   const escHtml = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -632,16 +706,110 @@
       + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:40px auto;padding:0 16px"><h1>Files</h1><ul>' + rows + '</ul></body>';
   }
 
+
+  // ---------- PHP support (php-wasm, runs in this browser tab) ----------
+  // The host executes .php files and sends visitors the resulting HTML,
+  // just like a normal web server would.
+  let phpPromise = null, phpSyncedVer = -1, hostVer = 0, phpQueue = Promise.resolve();
+  function loadPhp() {
+    if (phpPromise) return phpPromise;
+    phpPromise = (async () => {
+      const mod = await import('https://cdn.jsdelivr.net/npm/php-wasm/PhpWeb.mjs');
+      const php = new mod.PhpWeb();
+      php._buf = '';
+      php.addEventListener('output', e => { php._buf += [].concat(e.detail).join(''); });
+      php.addEventListener('error', e => { php._buf += '\n<!-- PHP stderr: ' + [].concat(e.detail).join('').replace(/-->/g, '') + ' -->'; });
+      if (php.binary) await php.binary; // wait for the WASM runtime
+      return php;
+    })();
+    phpPromise.catch(() => { phpPromise = null; });
+    return phpPromise;
+  }
+  async function syncPhpFiles(php) {
+    if (phpSyncedVer === hostVer) return;
+    const mk = async d => { try { await php.mkdir(d); } catch (e) {} };
+    await mk('/host');
+    for (const [path, file] of hosted) {
+      const parts = path.split('/'); parts.pop();
+      let dir = '/host';
+      for (const p of parts) { dir += '/' + p; await mk(dir); }
+      await php.writeFile('/host/' + path, new Uint8Array(await file.arrayBuffer()));
+    }
+    phpSyncedVer = hostVer;
+  }
+  // Quote a value as a PHP single-quoted string (JSON strings are unsafe: "$x" would be interpolated)
+  const phpStr = s => "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+  function runPhp(path, ctx) {
+    ctx = ctx || {};
+    const job = phpQueue.then(async () => {
+      const php = await loadPhp();
+      await syncPhpFiles(php);
+      php._buf = '';
+      const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+      const q = String(ctx.query || '').replace(/^\?/, '').slice(0, 8192);
+      const method = String(ctx.method || 'GET').toUpperCase() === 'POST' ? 'POST' : 'GET';
+      const body = method === 'POST' ? String(ctx.body || '').slice(0, 1048576) : '';
+      const code = '<?php chdir(' + phpStr('/host' + (dir ? '/' + dir : '')) + ');'
+        + ' $_SERVER["SCRIPT_NAME"] = ' + phpStr('/' + path) + ';'
+        + ' $_SERVER["REQUEST_METHOD"] = ' + phpStr(method) + ';'
+        + ' $_SERVER["QUERY_STRING"] = ' + phpStr(q) + ';'
+        + ' $_SERVER["REQUEST_URI"] = ' + phpStr('/' + path + (q ? '?' + q : '')) + ';'
+        + ' $_GET = []; parse_str(' + phpStr(q) + ', $_GET);'
+        + ' $_POST = []; parse_str(' + phpStr(body) + ', $_POST);'
+        + ' $_REQUEST = array_merge($_GET, $_POST);'
+        + ' include ' + phpStr('/host/' + path) + ';';
+      await php.run(code);
+      return php._buf;
+    });
+    phpQueue = job.catch(() => {});
+    return job;
+  }
+  const phpError = e => '<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;padding:24px"><h2>PHP error</h2><pre style="white-space:pre-wrap">'
+    + String((e && e.message) || e).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])) + '</pre></body>';
+  const isPhp = p => /\.php$/i.test(p);
+
+  // ---------- Activity log ----------
+  const logEl = $('logList');
+  let serverOn = true;
+  const stats = { reqs: 0, visitors: new Set(), start: Date.now() };
+  const live = new Map(); // peerId -> { conns:Set, since, reqs, last }
+  const liveEls = new Map();
+  const BAN_KEY = 'peerServerBans';
+  const banned = new Set();
+  try { JSON.parse(localStorage.getItem(BAN_KEY) || '[]').forEach(x => { if (typeof x === 'string') banned.add(x); }); } catch (e) {}
+  const saveBans = () => { try { localStorage.setItem(BAN_KEY, JSON.stringify([...banned])); } catch (e) {} };
+  const OFFLINE_HTML = '<!doctype html><meta charset="utf-8"><title>Offline</title><body style="font-family:system-ui;text-align:center;padding:15vh 24px"><h1>This server is stopped</h1><p>The owner has paused it. Try again later.</p></body>';
+  function logActivity(peerId, text) {
+    stats.reqs++; if (peerId) stats.visitors.add(peerId);
+    const lv = live.get(peerId); if (lv) { lv.reqs++; lv.last = Date.now(); }
+    renderStats();
+    if (logEl.querySelector('.empty')) logEl.innerHTML = '';
+    const li = document.createElement('li');
+    li.textContent = new Date().toLocaleTimeString() + ' · ' + (peerId ? display(peerId).slice(0, 14) : '?') + ' · ' + text;
+    logEl.prepend(li);
+    while (logEl.children.length > 40) logEl.lastChild.remove();
+  }
+
   async function serveGet(c, msg) {
     if (!c || !c.open) return;
+    if (!serverOn) { logActivity(c.peer, 'refused (server stopped)'); c.send({ type: 'file', id: msg.id, path: '/', mime: 'text/html', data: new TextEncoder().encode(OFFLINE_HTML).buffer }); return; }
     const path = normPath(msg.path);
     const hit = lookup(path);
+    logActivity(c.peer, (msg.method === 'POST' ? 'POST /' : 'GET /') + path + (msg.query || '') + (hit ? '' : '  (not found)'));
     try {
-      if (hit) {
+      if (path === '__files' && !hosted.has('__files')) {
+        c.send({ type: 'file', id: msg.id, path: '/__files', mime: 'text/html', data: new TextEncoder().encode(listingHtml()).buffer });
+      } else if (hit && isPhp(hit.path)) {
+        let html;
+        try { html = await runPhp(hit.path, msg); } catch (e) { html = phpError(e); }
+        c.send({ type: 'file', id: msg.id, path: '/' + hit.path, mime: 'text/html', data: new TextEncoder().encode(html).buffer });
+      } else if (hit) {
         const data = await hit.file.arrayBuffer();
         c.send({ type: 'file', id: msg.id, path: '/' + hit.path, mime: mimeOf(hit.file), data });
       } else if (path === '' && hosted.size) {
         c.send({ type: 'file', id: msg.id, path: '/', mime: 'text/html', data: new TextEncoder().encode(listingHtml()).buffer });
+      } else if (hosted.has('404.html') && !/\.[a-z0-9]+$/i.test(path.replace(/\.(html?|php)$/i, ''))) {
+        c.send({ type: 'file', id: msg.id, path: '/404.html', mime: 'text/html', data: await hosted.get('404.html').arrayBuffer() });
       } else {
         c.send({ type: 'nofile', id: msg.id, path: msg.path });
       }
@@ -651,11 +819,107 @@
   }
   async function serveVisit(c) {
     if (!c || !c.open) return;
+    if (!serverOn) { c.send({ type: 'page', name: 'offline', html: OFFLINE_HTML }); return; }
+    logActivity(c.peer, 'visit /');
     const hit = lookup('');
-    if (hit) c.send({ type: 'page', name: hit.path, html: await hit.file.text() });
+    if (hit && isPhp(hit.path)) {
+      let html;
+      try { html = await runPhp(hit.path); } catch (e) { html = phpError(e); }
+      c.send({ type: 'page', name: hit.path, html });
+    }
+    else if (hit) c.send({ type: 'page', name: hit.path, html: await hit.file.text() });
     else if (hosted.size) c.send({ type: 'page', name: 'files', html: listingHtml() });
     else c.send({ type: 'nopage' });
   }
+
+  // ---------- Remote editing (password protected) ----------
+  let editPassword = '';
+  const editFails = new Map(); // peer id -> { n, lockUntil }
+  const MAX_EDIT_BYTES = 25 * 1024 * 1024;
+  const safeEq = (a, b) => {
+    let d = a.length ^ b.length;
+    for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+    return d === 0;
+  };
+  async function serveEdit(c, msg) {
+    if (!c || !c.open) return;
+    const reply = o => { try { c.send(Object.assign({ type: 'editres', id: msg.id, op: msg.op }, o)); } catch (e) {} };
+    if (!editPassword) return reply({ ok: false, error: 'Remote editing is turned off on this host.' });
+    const f = editFails.get(c.peer) || { n: 0, lockUntil: 0 };
+    const g = editFails.get('*') || { n: 0, lockUntil: 0 };
+    if (Date.now() < f.lockUntil || Date.now() < g.lockUntil) return reply({ ok: false, error: 'Too many wrong passwords. Try again later.' });
+    if (typeof msg.password !== 'string' || !safeEq(msg.password, editPassword)) {
+      f.n++; g.n++;
+      if (g.n >= 15) { g.n = 0; g.lockUntil = Date.now() + 300000; }
+      editFails.set('*', g);
+      if (f.n >= 5) { f.n = 0; f.lockUntil = Date.now() + 60000; }
+      editFails.set(c.peer, f);
+      await new Promise(r => setTimeout(r, 700));
+      return reply({ ok: false, auth: false, error: 'Wrong password.' });
+    }
+    editFails.delete(c.peer);
+    try {
+      const op = msg.op;
+      if (op === 'auth') return reply({ ok: true });
+      if (op === 'list') {
+        return reply({ ok: true, files: [...hosted.keys()].sort().map(k => ({ path: k, size: hosted.get(k).size, mime: mimeOf(hosted.get(k)) })) });
+      }
+      const path = normPath(msg.path);
+      if (!path) return reply({ ok: false, error: 'Bad path.' });
+      if (op === 'read') {
+        const file = hosted.get(path);
+        if (!file) return reply({ ok: false, error: 'No such file.' });
+        return reply({ ok: true, path, mime: mimeOf(file), data: await file.arrayBuffer() });
+      }
+      if (op === 'write') {
+        const d = msg.data;
+        if (!(d instanceof ArrayBuffer || ArrayBuffer.isView(d))) return reply({ ok: false, error: 'No data.' });
+        if (d.byteLength > MAX_EDIT_BYTES) return reply({ ok: false, error: 'File too large (max 25 MB).' });
+        const old = hosted.get(path);
+        const ext = (path.split('.').pop() || '').toLowerCase();
+        hosted.set(path, new File([d], path.split('/').pop(), { type: (old && old.type) || MIME[ext] || '' }));
+        hostVer++; renderHosted();
+        return reply({ ok: true, path });
+      }
+      if (op === 'delete') {
+        if (!hosted.delete(path)) return reply({ ok: false, error: 'No such file.' });
+        hostVer++; renderHosted();
+        return reply({ ok: true });
+      }
+      if (op === 'rename') {
+        const to = normPath(msg.to);
+        const file = hosted.get(path);
+        if (!file) return reply({ ok: false, error: 'No such file.' });
+        if (!to) return reply({ ok: false, error: 'Bad new name.' });
+        if (hosted.has(to)) return reply({ ok: false, error: 'A file with that name already exists.' });
+        hosted.delete(path);
+        hosted.set(to, new File([file], to.split('/').pop(), { type: file.type }));
+        hostVer++; renderHosted();
+        return reply({ ok: true, path: to });
+      }
+      reply({ ok: false, error: 'Unknown operation.' });
+    } catch (e) {
+      reply({ ok: false, error: String((e && e.message) || e) });
+    }
+  }
+  function enableEdit() {
+    const v = $('editPass').value;
+    if (v.length < 8) return setStatus('Use an edit password of at least 8 characters.', 'err');
+    editPassword = v; editFails.clear();
+    $('editPass').value = '';
+    $('editOffBtn').disabled = false;
+    $('editNote').textContent = 'Remote editing is ON. Visitors need the password, then press ✎ in Peer Browser.';
+    setStatus('Remote editing enabled.', 'ok');
+  }
+  function disableEdit() {
+    editPassword = '';
+    $('editOffBtn').disabled = true;
+    $('editNote').textContent = 'Remote editing is off.';
+    setStatus('Remote editing disabled.', 'ok');
+  }
+  $('editOnBtn').onclick = enableEdit;
+  $('editPass').addEventListener('keydown', e => { if (e.key === 'Enter') enableEdit(); });
+  $('editOffBtn').onclick = disableEdit;
 
   function renderHosted() {
     const list = $('hostList');
@@ -670,11 +934,12 @@
       meta.textContent = fmt(f.size) + ' · ';
       const rm = document.createElement('a');
       rm.className = 'dl'; rm.href = '#'; rm.textContent = 'Remove';
-      rm.onclick = e => { e.preventDefault(); hosted.delete(k); renderHosted(); };
+      rm.onclick = e => { e.preventDefault(); hosted.delete(k); hostVer++; renderHosted(); };
       meta.appendChild(rm);
       list.appendChild(li);
     });
     $('unhostBtn').disabled = hosted.size === 0;
+    renderStats(); schedulePersist();
     const where = 'peer://' + display(peer && peer.id ? peer.id : '…');
     $('hostInfo').textContent = hosted.size
       ? 'Hosting ' + hosted.size + ' file' + (hosted.size > 1 ? 's' : '') + ' at ' + where
@@ -690,19 +955,177 @@
       path = path.split('/').filter(s => s && s !== '.' && s !== '..').join('/');
       if (path) hosted.set(path, f);
     }
+    hostVer++;
     renderHosted();
   }
   $('hostBtn').onclick = () => $('hostInput').click();
   $('hostFolderBtn').onclick = () => $('hostFolderInput').click();
   $('hostInput').onchange = () => { addHostFiles([...$('hostInput').files], false); $('hostInput').value = ''; };
   $('hostFolderInput').onchange = () => { addHostFiles([...$('hostFolderInput').files], true); $('hostFolderInput').value = ''; };
-  $('unhostBtn').onclick = () => { hosted.clear(); renderHosted(); };
+  $('copyAddr').onclick = () => { if (peer && peer.id) copyText('peer://' + display(peer.id), 'Site address copied.'); };
+  $('unhostBtn').onclick = () => { hosted.clear(); hostVer++; renderHosted(); };
 
   drop.onclick = () => fileInput.click();
   fileInput.onchange = () => { sendFiles([...fileInput.files]); fileInput.value = ''; };
   ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
   ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
   drop.addEventListener('drop', e => sendFiles([...e.dataTransfer.files]));
+
+  // ---------- Server control, stats, persistence ----------
+  const fmtDur = ms => { const t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60); return h ? h + 'h ' + m + 'm' : m ? m + 'm ' + (t % 60) + 's' : t + 's'; };
+  function renderStats() {
+    const up = !!(peer && peer.id);
+    $('srvPill').textContent = !up ? 'Connecting…' : serverOn ? 'Online' : 'Stopped';
+    $('srvPill').className = 'pill ' + (!up ? 'wait' : serverOn ? 'ok' : 'err');
+    $('srvAddr').textContent = up ? 'peer://' + display(peer.id) : '…';
+    $('srvReqs').textContent = stats.reqs;
+    $('srvVisitors').textContent = live.size;
+    renderLive();
+    $('srvUp').textContent = up && serverOn ? fmtDur(Date.now() - stats.start) : '-';
+    $('srvFiles').textContent = hosted.size;
+    $('serverBtn').textContent = serverOn ? 'Stop server' : 'Start server';
+  }
+  function trackConn(c) {
+    const add = () => {
+      let e = live.get(c.peer);
+      if (!e) { e = { conns: new Set(), since: Date.now(), reqs: 0, last: Date.now() }; live.set(c.peer, e); }
+      e.conns.add(c); renderStats();
+    };
+    const drop = () => {
+      const e = live.get(c.peer); if (!e) return;
+      e.conns.delete(c); if (!e.conns.size) live.delete(c.peer);
+      renderStats();
+    };
+    if (c.open) add(); else c.on('open', add);
+    c.on('close', drop); c.on('error', drop);
+  }
+  const mkLink = (text, fn) => {
+    const a = document.createElement('a');
+    a.className = 'dl'; a.href = '#'; a.textContent = text;
+    a.onclick = ev => { ev.preventDefault(); fn(); };
+    return a;
+  };
+  function renderLive() {
+    const ul = $('liveList');
+    $('liveCount').textContent = live.size ? '(' + live.size + ')' : '';
+    if (!live.size) {
+      if (liveEls.size || !ul.querySelector('.empty')) { liveEls.clear(); ul.innerHTML = '<li class="empty">Nobody is connected right now.</li>'; }
+      return;
+    }
+    const empty = ul.querySelector('.empty'); if (empty) empty.remove();
+    for (const [id, els] of liveEls) if (!live.has(id)) { els.li.remove(); liveEls.delete(id); }
+    for (const [id, e] of live) {
+      let els = liveEls.get(id);
+      if (!els) {
+        const li = document.createElement('li');
+        li.innerHTML = '<div class="name"></div><div class="meta"></div>';
+        li.querySelector('.name').textContent = display(id);
+        const info = document.createElement('span');
+        li.querySelector('.meta').append(info, document.createTextNode(' · '),
+          mkLink('Copy ID', () => copyText(display(id), 'Copied ' + display(id))),
+          document.createTextNode(' · '),
+          mkLink('Disconnect', () => { const x = live.get(id); if (x) x.conns.forEach(c => { try { c.close(); } catch (er) {} }); }),
+          document.createTextNode(' · '), mkLink('Ban', () => banPeer(id)));
+        ul.appendChild(li);
+        els = { li, info }; liveEls.set(id, els);
+      }
+      els.info.textContent = e.reqs + ' request' + (e.reqs === 1 ? '' : 's') + ' · connected ' + fmtDur(Date.now() - e.since) + ' · last active ' + fmtDur(Date.now() - e.last) + ' ago';
+    }
+  }
+  function banPeer(raw) {
+    const id = toPeerId(String(raw || '').replace(/^peer:\/\//i, ''));
+    if (!id || !/^[A-Za-z0-9_-]+$/.test(id)) return setStatus('Enter a peer ID or a name ending in .peer.', 'err');
+    if (peer && id === peer.id) return setStatus("You can't ban yourself.", 'err');
+    banned.add(id); saveBans();
+    const e = live.get(id);
+    live.delete(id);
+    if (e) e.conns.forEach(c => { try { c.close(); } catch (er) {} });
+    if (conn && conn.peer === id) { try { conn.close(); } catch (er) {} }
+    renderBans(); renderStats();
+    setStatus('Banned ' + display(id) + '.', 'ok');
+  }
+  function unbanPeer(id) {
+    banned.delete(id); saveBans(); renderBans();
+    setStatus('Unbanned ' + display(id) + '.', 'ok');
+  }
+  function renderBans() {
+    const ul = $('banList');
+    $('banCount').textContent = banned.size ? '(' + banned.size + ')' : '';
+    ul.innerHTML = '';
+    if (!banned.size) { ul.innerHTML = '<li class="empty">No one is banned.</li>'; return; }
+    [...banned].forEach(id => {
+      const li = document.createElement('li');
+      li.innerHTML = '<div class="name"></div><div class="meta"></div>';
+      li.querySelector('.name').textContent = display(id);
+      li.querySelector('.meta').appendChild(mkLink('Unban', () => unbanPeer(id)));
+      ul.appendChild(li);
+    });
+  }
+  $('banBtn').onclick = () => { banPeer($('banInput').value); $('banInput').value = ''; };
+  $('banInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('banBtn').onclick(); });
+  renderBans();
+  setInterval(renderStats, 1000);
+  $('serverBtn').onclick = () => {
+    serverOn = !serverOn;
+    if (serverOn) stats.start = Date.now();
+    renderStats();
+    setStatus(serverOn ? 'Server started.' : 'Server stopped. Visitors will see an offline page.', serverOn ? 'ok' : 'err');
+  };
+  $('srvCopy').onclick = () => { if (peer && peer.id) copyText('peer://' + display(peer.id), 'Site address copied.'); };
+
+  // Keep the screen (and so this tab) awake while serving
+  let wakeLock = null;
+  async function setWake(on) {
+    try {
+      if (on && 'wakeLock' in navigator && !wakeLock) {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      } else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+    } catch (e) {}
+  }
+  if (!('wakeLock' in navigator)) $('wakeToggle').parentElement.style.display = 'none';
+  $('wakeToggle').onchange = () => setWake($('wakeToggle').checked);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && $('wakeToggle').checked) setWake(true); });
+  setWake(true);
+
+  // Save the site in this browser (IndexedDB) so it is still here after a reload or restart
+  let persistedVer = -1, loadedFromDb = false, persistTimer = null;
+  const openDb = () => new Promise((res, rej) => {
+    const r = indexedDB.open('peerServer', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('files', { keyPath: 'path' });
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  function schedulePersist() {
+    if (!loadedFromDb || persistedVer === hostVer) return;
+    clearTimeout(persistTimer); persistTimer = setTimeout(persist, 400);
+  }
+  async function persist() {
+    const ver = hostVer;
+    try {
+      const db = await openDb();
+      await new Promise((res, rej) => {
+        const tx = db.transaction('files', 'readwrite'), st = tx.objectStore('files');
+        st.clear();
+        for (const [path, f] of hosted) st.put({ path, blob: f, type: f.type });
+        tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
+      });
+      persistedVer = ver;
+    } catch (e) { /* storage unavailable (private mode etc.): site just won't survive a reload */ }
+  }
+  async function restore() {
+    try {
+      const db = await openDb();
+      const rows = await new Promise((res, rej) => {
+        const q = db.transaction('files').objectStore('files').getAll();
+        q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+      });
+      for (const r of rows) if (!hosted.has(r.path)) hosted.set(r.path, new File([r.blob], r.path.split('/').pop(), { type: r.type || '' }));
+      if (rows.length) hostVer++;
+      if (rows.length) setStatus('Restored ' + rows.length + ' saved file' + (rows.length > 1 ? 's' : '') + '. Server is running.', 'ok');
+    } catch (e) {}
+    loadedFromDb = true; persistedVer = hostVer; renderHosted();
+  }
+  restore();
 
   let savedName = '';
   try { savedName = localStorage.getItem('peerShareName') || ''; } catch (e) {}
