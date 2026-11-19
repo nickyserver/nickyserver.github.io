@@ -2,122 +2,119 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Toolkit</title>
-  <meta name="theme-color" content="#0f1419">
-  <meta name="description" content="Offline productivity toolkit: focus timer, calculator, unit converter, scratchpad.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f8fc">
+  <meta name="description" content="A local-first Files app for ChromeOS.">
+  <meta name="color-scheme" content="light">
+  <title>Files</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="titlebar" id="titlebar">
-    <div class="brand"><span class="logo" aria-hidden="true"></span><strong>Toolkit</strong></div>
-    <nav class="tabs" role="tablist" aria-label="Tools">
-      <button role="tab" data-tool="focus"   aria-selected="true"  id="tab-focus">Focus <kbd>1</kbd></button>
-      <button role="tab" data-tool="calc"    aria-selected="false" id="tab-calc">Calculator <kbd>2</kbd></button>
-      <button role="tab" data-tool="convert" aria-selected="false" id="tab-convert">Converter <kbd>3</kbd></button>
-      <button role="tab" data-tool="notes"   aria-selected="false" id="tab-notes">Scratchpad <kbd>4</kbd></button>
-    </nav>
-    <div class="actions">
-      <button id="install" class="btn ghost" hidden>Install app</button>
-      <button id="theme" class="btn ghost" title="Toggle theme" aria-label="Toggle theme">◐</button>
+  <div id="install-gate" class="install-gate" aria-live="polite">
+    <div class="install-card">
+      <div class="brand-mark large" aria-hidden="true">
+        <svg viewBox="0 0 48 48"><path d="M5.5 13.5a4 4 0 0 1 4-4h10l4.2 4.5h14.8a4 4 0 0 1 4 4v19a4 4 0 0 1-4 4h-29a4 4 0 0 1-4-4z" fill="#4285f4"/><path d="M5.5 18h37v19a4 4 0 0 1-4 4h-29a4 4 0 0 1-4-4z" fill="#1a73e8"/><path d="M5.5 18h37" stroke="#8ab4f8" stroke-width="2"/></svg>
+      </div>
+      <p class="eyebrow">CHROMEOS FILES</p>
+      <h1>Install Files to continue</h1>
+      <p class="install-copy">This app is designed to run in its own window. Install it from Chrome, then open the installed Files app from your launcher.</p>
+      <button id="install-button" class="primary-button install-button" type="button">Install Files</button>
+      <div id="install-help" class="install-help" hidden>
+        <strong>Install from Chrome</strong>
+        <p>Open the Chrome menu and choose <b>Install Files</b> or <b>Cast, save, and share → Install page as app</b>. Then launch Files from your Chromebook launcher.</p>
+      </div>
+      <p id="install-status" class="install-status">Install is required to use this app.</p>
+      <p class="install-footnote">Installation is controlled by Chrome. This page cannot silently install itself.</p>
     </div>
-  </header>
+  </div>
 
-  <main>
-    <!-- FOCUS -->
-    <section id="panel-focus" class="panel" role="tabpanel" aria-labelledby="tab-focus">
-      <div class="card timer-card">
-        <div class="modes" role="group" aria-label="Timer mode">
-          <button class="chip active" data-mode="work">Focus</button>
-          <button class="chip" data-mode="short">Short break</button>
-          <button class="chip" data-mode="long">Long break</button>
+  <div id="app" class="app-shell" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48"><path d="M5.5 13.5a4 4 0 0 1 4-4h10l4.2 4.5h14.8a4 4 0 0 1 4 4v19a4 4 0 0 1-4 4h-29a4 4 0 0 1-4-4z" fill="#4285f4"/><path d="M5.5 18h37v19a4 4 0 0 1-4 4h-29a4 4 0 0 1-4-4z" fill="#1a73e8"/><path d="M5.5 18h37" stroke="#8ab4f8" stroke-width="2"/></svg>
         </div>
-        <div class="ring-wrap">
-          <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
-            <circle class="ring-bg" cx="60" cy="60" r="54"/>
-            <circle class="ring-fg" id="ring-fg" cx="60" cy="60" r="54"/>
-          </svg>
-          <div class="time" id="time" role="timer" aria-live="off">25:00</div>
-        </div>
-        <div class="controls">
-          <button class="btn primary big" id="start">Start <kbd>Space</kbd></button>
-          <button class="btn" id="reset">Reset <kbd>R</kbd></button>
-          <button class="btn" id="skip">Skip <kbd>N</kbd></button>
-        </div>
-        <p class="muted" id="session-label">Session 1 of 4 · Keeps screen awake while running</p>
+        <span>Files</span>
       </div>
-      <div class="card">
-        <h2>Settings</h2>
-        <div class="grid3">
-          <label>Focus (min)<input type="number" id="set-work" min="1" max="180" value="25"></label>
-          <label>Short break<input type="number" id="set-short" min="1" max="60" value="5"></label>
-          <label>Long break<input type="number" id="set-long" min="1" max="90" value="15"></label>
-        </div>
-        <label class="check"><input type="checkbox" id="set-notify"> Notify me when a session ends</label>
-        <label class="check"><input type="checkbox" id="set-sound" checked> Play a soft chime</label>
-        <h2>Today</h2>
-        <p class="stat"><span id="stat-today">0</span> sessions · <span id="stat-min">0</span> focused minutes</p>
-      </div>
-    </section>
 
-    <!-- CALCULATOR -->
-    <section id="panel-calc" class="panel" role="tabpanel" aria-labelledby="tab-calc" hidden>
-      <div class="card calc-card">
-        <input id="calc-input" class="calc-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
-               placeholder="Type an expression, e.g. (12.5 + 7) * 3 / 2^2" aria-label="Expression">
-        <div class="calc-result" id="calc-result" aria-live="polite">0</div>
-        <div class="keys" id="keys"></div>
-      </div>
-      <div class="card">
-        <div class="row-between"><h2>History</h2><button class="btn ghost small" id="calc-clear-hist">Clear</button></div>
-        <ul class="history" id="calc-history"></ul>
-        <p class="muted">Supports + − × ÷ ^ % ( ), sqrt(), sin/cos/tan (degrees), ln, log, abs, pi, e, and <code>ans</code>.</p>
-      </div>
-    </section>
+      <button class="sidebar-action" id="open-folder-sidebar" type="button">
+        <span class="side-icon" data-icon="folder-plus"></span><span>Open folder</span>
+      </button>
+      <button class="sidebar-action" id="open-files-sidebar" type="button">
+        <span class="side-icon" data-icon="file-plus"></span><span>Open files</span>
+      </button>
 
-    <!-- CONVERTER -->
-    <section id="panel-convert" class="panel" role="tabpanel" aria-labelledby="tab-convert" hidden>
-      <div class="card">
-        <div class="modes" id="conv-cats" role="group" aria-label="Category"></div>
-        <div class="conv-grid">
-          <div>
-            <label for="conv-from-val">From</label>
-            <input id="conv-from-val" type="number" inputmode="decimal" value="1" step="any">
-            <select id="conv-from-unit" aria-label="From unit"></select>
+      <div class="nav-label">BROWSE</div>
+      <nav class="nav-list" aria-label="File locations">
+        <button class="nav-item active" data-view="myfiles" type="button"><span data-icon="folder"></span><span>My files</span></button>
+        <button class="nav-item" data-view="recent" type="button"><span data-icon="clock"></span><span>Recent</span></button>
+        <button class="nav-item" data-view="starred" type="button"><span data-icon="star"></span><span>Starred</span></button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="storage-card">
+          <div class="storage-heading"><span data-icon="hard-drive"></span><span>Local files</span></div>
+          <p>Files stay on this device. Nothing is uploaded.</p>
+        </div>
+        <div class="sidebar-version">Files for ChromeOS <span>1.0</span></div>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <button id="mobile-menu" class="icon-button mobile-menu" type="button" aria-label="Open navigation" title="Open navigation"><span data-icon="menu"></span></button>
+        <div class="search-wrap"><span data-icon="search"></span><input id="search-input" type="search" placeholder="Search in this location" autocomplete="off" aria-label="Search files"></div>
+        <div class="top-actions">
+          <button id="sort-button" class="icon-button" type="button" title="Sort by name" aria-label="Sort files"><span data-icon="arrow-down-a-z"></span></button>
+          <button id="view-toggle" class="icon-button" type="button" title="Switch view" aria-label="Switch view"><span data-icon="layout-grid"></span></button>
+          <button id="top-open-files" class="primary-button compact" type="button"><span data-icon="plus"></span> Open files</button>
+        </div>
+      </header>
+
+      <section class="content-area">
+        <div class="location-row">
+          <div class="location-title"><h1 id="location-heading">My files</h1><div id="breadcrumbs" class="breadcrumbs" aria-label="Current folder"></div></div>
+          <div class="location-actions"><span id="item-count" class="item-count">No location selected</span><button id="top-open-folder" class="secondary-button" type="button"><span data-icon="folder-plus"></span> Open folder</button></div>
+        </div>
+
+        <div id="empty-state" class="empty-state">
+          <div class="empty-illustration" aria-hidden="true">
+            <svg viewBox="0 0 180 142"><rect x="28" y="18" width="124" height="104" rx="12" fill="#e8f0fe"/><path d="M43 44a7 7 0 0 1 7-7h27l10 10h43a7 7 0 0 1 7 7v47a7 7 0 0 1-7 7H50a7 7 0 0 1-7-7z" fill="#8ab4f8"/><path d="M43 57h94v44a7 7 0 0 1-7 7H50a7 7 0 0 1-7-7z" fill="#4285f4"/><path d="M67 76h46M67 88h30" stroke="#d2e3fc" stroke-width="5" stroke-linecap="round"/></svg>
           </div>
-          <button class="btn swap" id="conv-swap" title="Swap units" aria-label="Swap units">⇄</button>
-          <div>
-            <label for="conv-to-val">To</label>
-            <input id="conv-to-val" type="number" inputmode="decimal" step="any">
-            <select id="conv-to-unit" aria-label="To unit"></select>
-          </div>
+          <h2>Your files, all in one place</h2>
+          <p>Open a folder to browse its contents, or choose individual files to view them here.</p>
+          <div class="empty-actions"><button id="empty-open-folder" class="primary-button" type="button"><span data-icon="folder-plus"></span> Open folder</button><button id="empty-open-files" class="secondary-button" type="button"><span data-icon="file-plus"></span> Choose files</button></div>
+          <p class="privacy-note"><span data-icon="shield-check"></span> Your files are read directly from your device.</p>
         </div>
-        <p class="muted" id="conv-note"></p>
-      </div>
-    </section>
 
-    <!-- SCRATCHPAD -->
-    <section id="panel-notes" class="panel" role="tabpanel" aria-labelledby="tab-notes" hidden>
-      <div class="card notes-card">
-        <div class="row-between">
-          <h2>Scratchpad</h2>
-          <div class="row-gap">
-            <span class="muted" id="notes-status">Saved</span>
-            <button class="btn small" id="notes-open">Open file</button>
-            <button class="btn small" id="notes-save">Save as file</button>
-            <button class="btn small ghost" id="notes-clear">Clear</button>
+        <div id="drop-hint" class="drop-hint" hidden><span data-icon="download"></span> Drop files here to add them to this view</div>
+        <div id="file-area" class="file-area" hidden>
+          <div id="file-grid" class="file-grid" role="list"></div>
+          <div id="file-table-wrap" class="file-table-wrap" hidden>
+            <table class="file-table">
+              <thead><tr><th>Name</th><th>Type</th><th>Size</th><th>Modified</th><th aria-label="Actions"></th></tr></thead>
+              <tbody id="file-table-body"></tbody>
+            </table>
           </div>
+          <div id="no-results" class="no-results" hidden><span data-icon="search-x"></span><h2>No matching files</h2><p>Try a different search term.</p></div>
         </div>
-        <textarea id="notes" spellcheck="true" placeholder="Jot anything down. It autosaves on this device and works offline."></textarea>
-        <p class="muted"><span id="notes-count">0 words</span> · Autosaved locally · Ctrl+S saves a file</p>
-      </div>
-    </section>
-  </main>
+      </section>
+    </main>
+  </div>
 
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  <script src="app.js"></script>
+  <dialog id="viewer-dialog" class="viewer-dialog">
+    <div class="viewer-header"><div class="viewer-title-wrap"><span id="viewer-file-icon" class="viewer-file-icon" data-icon="file"></span><div><h2 id="viewer-title">File preview</h2><p id="viewer-subtitle"></p></div></div><div class="viewer-actions"><button id="viewer-download" class="icon-button" type="button" title="Download a copy" aria-label="Download a copy"><span data-icon="download"></span></button><button id="viewer-close" class="icon-button" type="button" title="Close preview" aria-label="Close preview"><span data-icon="x"></span></button></div></div>
+    <div id="viewer-content" class="viewer-content"></div>
+  </dialog>
+  <input id="fallback-file-input" type="file" multiple hidden>
+  <input id="fallback-folder-input" type="file" webkitdirectory multiple hidden>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js" defer></script>
 </body>
 </html>
