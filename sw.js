@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chromeos-files-v1';
+const CACHE_NAME = 'chromeos-files-v2';
 const APP_SHELL = [
   './',
   './index.html',

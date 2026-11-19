@@ -630,3 +630,450 @@ document.addEventListener('click', (event) => {
 if (isStandalone()) {
   document.documentElement.classList.add('installed-mode');
 }
+
+
+/* Google Drive integration: client-side OAuth, read-only Drive API access. */
+Object.assign(state, {
+  driveEntries: [],
+  driveFolderStack: [],
+  drivePageToken: null,
+  driveToken: null,
+  driveTokenExpiry: 0,
+  driveAccount: '',
+  driveLoading: false
+});
+
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file';
+const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+let driveTokenClient = null;
+let driveTokenRequest = null;
+let googleIdentityPromise = null;
+
+function configuredDriveClientId() {
+  return (localStorage.getItem('chromeos-files-google-client-id') || '').trim();
+}
+
+function updateDriveConnectionUI() {
+  const connected = Boolean(state.driveToken && state.driveTokenExpiry > Date.now());
+  const status = $('#drive-connect-status');
+  const connect = $('#drive-connect-button');
+  const disconnect = $('#drive-disconnect-button');
+  const dot = $('#drive-nav-dot');
+  if (status) status.textContent = connected ? (state.driveAccount ? `Connected as ${state.driveAccount}` : 'Connected to your account') : 'Not connected';
+  if (connect) connect.textContent = connected ? 'Refresh connection' : (configuredDriveClientId() ? 'Connect Google Drive' : 'Set up Google Drive');
+  if (disconnect) disconnect.hidden = !connected;
+  if (dot) dot.classList.toggle('connected', connected);
+}
+
+function openDriveSetup() {
+  const dialog = $('#drive-setup-dialog');
+  $('#drive-client-id').value = configuredDriveClientId();
+  if (!dialog.open) dialog.showModal();
+}
+
+function loadGoogleIdentity() {
+  if (window.google?.accounts?.oauth2) return Promise.resolve();
+  if (googleIdentityPromise) return googleIdentityPromise;
+  googleIdentityPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => window.google?.accounts?.oauth2 ? resolve() : reject(new Error('Google sign-in did not initialise.'));
+    script.onerror = () => reject(new Error('Could not load Google sign-in. Check your internet connection.'));
+    document.head.append(script);
+  });
+  return googleIdentityPromise;
+}
+
+async function requestDriveAccess() {
+  const clientId = configuredDriveClientId();
+  if (!clientId || !clientId.endsWith('.apps.googleusercontent.com')) {
+    openDriveSetup();
+    return null;
+  }
+  await loadGoogleIdentity();
+  if (!driveTokenClient) {
+    driveTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: DRIVE_SCOPE,
+      callback: (response) => {
+        if (response.error) {
+          driveTokenRequest?.reject(new Error(response.error_description || response.error));
+          driveTokenRequest = null;
+          return;
+        }
+        state.driveToken = response.access_token;
+        state.driveTokenExpiry = Date.now() + (Number(response.expires_in || 3600) * 1000);
+        driveTokenRequest?.resolve(response);
+        driveTokenRequest = null;
+        updateDriveConnectionUI();
+      },
+      error_callback: (error) => {
+        driveTokenRequest?.reject(new Error(error?.message || 'Google sign-in was cancelled.'));
+        driveTokenRequest = null;
+      }
+    });
+  }
+  return new Promise((resolve, reject) => {
+    driveTokenRequest = { resolve, reject };
+    try {
+      driveTokenClient.requestAccessToken({ prompt: '' });
+    } catch (error) {
+      driveTokenRequest = null;
+      reject(error);
+    }
+  });
+}
+
+async function connectGoogleDrive() {
+  if (!configuredDriveClientId()) {
+    openDriveSetup();
+    return;
+  }
+  try {
+    $('#drive-connect-button').disabled = true;
+    toast('Connecting to Google Drive…');
+    await requestDriveAccess();
+    if (state.driveToken) {
+      state.driveFolderStack = [];
+      state.currentView = 'drive';
+      state.search = '';
+      $('#search-input').value = '';
+      setActiveNav('drive');
+      await loadDriveFolder('root', 'My Drive', false);
+      updateLocation();
+      renderEntries();
+      toast('Google Drive connected');
+    }
+  } catch (error) {
+    console.error('Google Drive connection failed:', error);
+    toast(error.message || 'Could not connect to Google Drive.');
+  } finally {
+    $('#drive-connect-button').disabled = false;
+    updateDriveConnectionUI();
+  }
+}
+
+async function driveFetch(path, params = {}) {
+  if (!state.driveToken || state.driveTokenExpiry <= Date.now()) {
+    state.driveToken = null;
+    updateDriveConnectionUI();
+    throw new Error('Your Google Drive connection expired. Connect again to continue.');
+  }
+  const url = new URL(`${DRIVE_API}${path}`);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
+  });
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${state.driveToken}` } });
+  if (response.status === 401) {
+    state.driveToken = null;
+    state.driveTokenExpiry = 0;
+    updateDriveConnectionUI();
+    throw new Error('Google Drive needs you to reconnect. Select Connect Google Drive.');
+  }
+  if (!response.ok) {
+    let message = `Google Drive request failed (${response.status}).`;
+    try { const data = await response.json(); message = data.error?.message || message; } catch (_) {}
+    throw new Error(message);
+  }
+  return response;
+}
+
+function driveFolderId() {
+  return state.driveFolderStack.length ? state.driveFolderStack[state.driveFolderStack.length - 1].id : 'root';
+}
+
+async function loadDriveFolder(folderId = 'root', folderName = 'My Drive', push = true, append = false) {
+  if (!state.driveToken) throw new Error('Connect Google Drive first.');
+  state.driveLoading = true;
+  const query = `'${folderId.replace(/'/g, "\\'")}' in parents and trashed = false`;
+  const params = {
+    q: query,
+    pageSize: 1000,
+    orderBy: 'folder,name',
+    fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink,thumbnailLink,capabilities(canDownload),shortcutDetails(targetId,targetMimeType))',
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true
+  };
+  if (append && state.drivePageToken) params.pageToken = state.drivePageToken;
+  try {
+    const response = await driveFetch('/files', params);
+    const data = await response.json();
+    const mapped = (data.files || []).filter(file => file.mimeType !== 'application/vnd.google-apps.shortcut').map(file => ({
+      id: `drive:${file.id}`,
+      driveId: file.id,
+      name: file.name,
+      kind: file.mimeType === 'application/vnd.google-apps.folder' ? 'directory' : 'file',
+      type: file.mimeType || '',
+      mimeType: file.mimeType || '',
+      size: Number(file.size || 0),
+      modified: file.modifiedTime ? new Date(file.modifiedTime).getTime() : 0,
+      webViewLink: file.webViewLink || `https://drive.google.com/open?id=${encodeURIComponent(file.id)}`,
+      thumbnailLink: file.thumbnailLink || '',
+      canDownload: file.capabilities?.canDownload !== false,
+      origin: 'drive',
+      path: folderName
+    }));
+    state.driveEntries = append ? [...state.driveEntries, ...mapped] : mapped;
+    state.drivePageToken = data.nextPageToken || null;
+    if (push) {
+      state.driveFolderStack.push({ id: folderId, name: folderName });
+    } else if (folderId === 'root') {
+      state.driveFolderStack = [];
+    }
+    state.driveLoading = false;
+    updateDriveConnectionUI();
+    return mapped.length;
+  } catch (error) {
+    state.driveLoading = false;
+    throw error;
+  }
+}
+
+async function enterDriveFolder(entry) {
+  if (!state.driveToken) return connectGoogleDrive();
+  try {
+    await loadDriveFolder(entry.driveId, entry.name, true, false);
+    updateLocation();
+    renderEntries();
+  } catch (error) { toast(error.message || 'Could not open this Drive folder.'); }
+}
+
+async function driveNavigateUp(index) {
+  if (index < 0) return;
+  const target = index === -1 ? { id: 'root', name: 'My Drive' } : state.driveFolderStack[index];
+  state.driveFolderStack = index === -1 ? [] : state.driveFolderStack.slice(0, index + 1);
+  try {
+    await loadDriveFolder(target.id, target.name, false, false);
+    updateLocation();
+    renderEntries();
+  } catch (error) { toast(error.message || 'Could not open this Drive location.'); }
+}
+
+function getVisibleEntries() {
+  const source = state.currentView === 'drive' ? state.driveEntries : state.entries;
+  let entries = [...source];
+  if (state.currentView === 'starred') entries = [...state.entries, ...state.driveEntries].filter(entry => state.starredIds.has(entry.id));
+  if (state.currentView === 'recent') entries = [...state.entries, ...state.driveEntries].filter(entry => state.recentIds.includes(entry.id)).sort((a, b) => state.recentIds.indexOf(a.id) - state.recentIds.indexOf(b.id));
+  if (state.search.trim()) {
+    const query = state.search.trim().toLowerCase();
+    entries = entries.filter(entry => entry.name.toLowerCase().includes(query));
+  }
+  if (state.currentView !== 'recent') {
+    entries.sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1;
+      return state.sortAscending ? a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }) : b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }
+  return entries;
+}
+
+function updateLocation() {
+  const heading = $('#location-heading');
+  const breadcrumbs = $('#breadcrumbs');
+  breadcrumbs.replaceChildren();
+  if (state.currentView === 'drive') {
+    heading.textContent = state.driveFolderStack.length ? state.driveFolderStack[state.driveFolderStack.length - 1].name : 'My Drive';
+    const root = document.createElement('button');
+    root.type = 'button'; root.textContent = 'My Drive'; root.className = state.driveFolderStack.length ? '' : 'crumb-current';
+    root.addEventListener('click', () => driveNavigateUp(-1));
+    breadcrumbs.append(root);
+    state.driveFolderStack.forEach((part, index) => {
+      if (index === 0 && part.id === 'root') return;
+      const separator = document.createElement('span'); separator.className = 'crumb-separator'; separator.textContent = '›';
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = part.name;
+      if (index === state.driveFolderStack.length - 1) button.className = 'crumb-current';
+      button.addEventListener('click', () => driveNavigateUp(index));
+      breadcrumbs.append(separator, button);
+    });
+    return;
+  }
+  if (state.currentView === 'recent') { heading.textContent = 'Recent'; return; }
+  if (state.currentView === 'starred') { heading.textContent = 'Starred'; return; }
+  heading.textContent = 'My files';
+  if (!state.directoryStack.length) {
+    const crumb = document.createElement('span'); crumb.className = 'crumb-current'; crumb.textContent = 'On this device'; breadcrumbs.append(crumb);
+  } else {
+    state.directoryStack.forEach((part, index) => {
+      if (index) { const separator = document.createElement('span'); separator.className = 'crumb-separator'; separator.textContent = '›'; breadcrumbs.append(separator); }
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = part.name;
+      if (index === state.directoryStack.length - 1) button.className = 'crumb-current';
+      button.addEventListener('click', () => navigateUp(index)); breadcrumbs.append(button);
+    });
+  }
+}
+
+function renderEntries() {
+  const visible = getVisibleEntries();
+  const empty = $('#empty-state');
+  const area = $('#file-area');
+  const count = $('#item-count');
+  const noResults = $('#no-results');
+  const grid = $('#file-grid');
+  const tableWrap = $('#file-table-wrap');
+  const tableBody = $('#file-table-body');
+  const source = state.currentView === 'drive' ? state.driveEntries : state.entries;
+  const hasEntries = source.length > 0;
+  empty.hidden = hasEntries;
+  area.hidden = !hasEntries;
+  noResults.hidden = visible.length > 0 || !hasEntries;
+  grid.hidden = !state.gridView || visible.length === 0;
+  tableWrap.hidden = state.gridView || visible.length === 0;
+  count.textContent = `${visible.length} item${visible.length === 1 ? '' : 's'}`;
+  $('#drive-load-row').hidden = state.currentView !== 'drive' || !state.drivePageToken;
+  $('#drive-upload-button').hidden = state.currentView !== 'drive' || !state.driveToken;
+  $('#empty-state h2').textContent = state.currentView === 'drive' ? (state.driveToken ? 'This folder is empty' : 'Connect Google Drive') : 'Your files, all in one place';
+  $('#empty-state > p:not(.privacy-note)').textContent = state.currentView === 'drive'
+    ? (state.driveToken ? 'There are no files in this Google Drive folder.' : 'Connect your Google account to browse files stored in Google Drive.')
+    : 'Open a folder to browse its contents, or choose individual files to view them here.';
+  $('#empty-open-folder').hidden = state.currentView === 'drive';
+  $('#empty-open-files').hidden = state.currentView === 'drive';
+  $('.privacy-note').hidden = state.currentView === 'drive';
+  grid.replaceChildren(); tableBody.replaceChildren();
+
+  visible.forEach((entry) => {
+    const card = document.createElement('div');
+    card.className = `file-card${entry.kind === 'directory' ? ' folder' : ''}`;
+    card.setAttribute('role', 'listitem'); card.tabIndex = 0;
+    const fileIcon = document.createElement('div'); fileIcon.className = 'file-icon'; fileIcon.innerHTML = icon(iconForEntry(entry));
+    const name = document.createElement('div'); name.className = 'file-name'; name.textContent = entry.name;
+    const meta = document.createElement('div'); meta.className = 'file-meta'; meta.textContent = entry.kind === 'directory' ? 'Folder' : formatSize(entry.size);
+    card.append(createStarButton(entry), fileIcon, name, meta);
+    card.addEventListener('click', (event) => { if (!event.target.closest('.file-star')) activateEntry(entry); });
+    card.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activateEntry(entry); } });
+    grid.append(card);
+
+    const row = document.createElement('tr');
+    const nameCell = document.createElement('td'); nameCell.className = 'name-cell'; nameCell.innerHTML = icon(iconForEntry(entry));
+    const label = document.createElement('span'); label.textContent = entry.name; nameCell.append(label);
+    const typeCell = document.createElement('td'); typeCell.textContent = entry.kind === 'directory' ? 'Folder' : (entry.origin === 'drive' ? (entry.mimeType.startsWith('application/vnd.google-apps.') ? 'Google file' : typeLabel(entry)) : typeLabel(entry));
+    const sizeCell = document.createElement('td'); sizeCell.textContent = entry.kind === 'directory' ? '—' : formatSize(entry.size);
+    const modifiedCell = document.createElement('td'); modifiedCell.textContent = formatDate(entry.modified);
+    const actionsCell = document.createElement('td'); actionsCell.className = 'row-actions'; actionsCell.append(createStarButton(entry, true));
+    row.append(nameCell, typeCell, sizeCell, modifiedCell, actionsCell);
+    row.addEventListener('click', (event) => { if (!event.target.closest('.row-star')) activateEntry(entry); });
+    tableBody.append(row);
+  });
+}
+
+function activateEntry(entry) {
+  if (entry.origin === 'drive') {
+    if (entry.kind === 'directory') enterDriveFolder(entry);
+    else openDrivePreview(entry);
+    return;
+  }
+  if (entry.kind === 'directory') { navigateInto(entry); return; }
+  openPreview(entry);
+}
+
+async function openDrivePreview(entry) {
+  try {
+    toast('Loading preview…');
+    const googleMime = entry.mimeType;
+    let url;
+    let previewName = entry.name;
+    if (googleMime === 'application/vnd.google-apps.document' || googleMime === 'application/vnd.google-apps.spreadsheet' || googleMime === 'application/vnd.google-apps.presentation' || googleMime === 'application/vnd.google-apps.drawing') {
+      url = `${DRIVE_API}/files/${encodeURIComponent(entry.driveId)}/export?mimeType=application%2Fpdf`;
+    } else {
+      url = `${DRIVE_API}/files/${encodeURIComponent(entry.driveId)}?alt=media`;
+    }
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${state.driveToken}` } });
+    if (response.status === 401) {
+      state.driveToken = null; state.driveTokenExpiry = 0; updateDriveConnectionUI();
+      throw new Error('Google Drive needs you to reconnect.');
+    }
+    if (!response.ok) {
+      let message = `Could not download this Drive file (${response.status}).`;
+      try { const data = await response.json(); message = data.error?.message || message; } catch (_) {}
+      if (entry.webViewLink) {
+        const open = window.confirm(`${message}\n\nOpen this file in Google Drive instead?`);
+        if (open) window.open(entry.webViewLink, '_blank', 'noopener');
+        return;
+      }
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const type = blob.type || (url.includes('/export') ? 'application/pdf' : 'application/octet-stream');
+    if (!entry.canDownload && !type.includes('pdf')) {
+      window.open(entry.webViewLink, '_blank', 'noopener');
+      return;
+    }
+    if (url.includes('/export')) previewName = `${entry.name}.pdf`;
+    const file = new File([blob], previewName, { type, lastModified: entry.modified || Date.now() });
+    const localPreviewEntry = { ...entry, name: previewName, type, size: file.size, file, origin: 'drive-preview' };
+    await openPreview(localPreviewEntry);
+  } catch (error) {
+    toast(error.message || 'Could not preview this Drive file.');
+  }
+}
+
+$('#drive-connect-button').addEventListener('click', connectGoogleDrive);
+$('#drive-disconnect-button').addEventListener('click', () => {
+  if (state.driveToken) google.accounts.oauth2.revoke(state.driveToken, () => {});
+  state.driveToken = null; state.driveTokenExpiry = 0; state.driveAccount = '';
+  state.driveEntries = []; state.driveFolderStack = []; state.drivePageToken = null;
+  if (state.currentView === 'drive') { state.currentView = 'myfiles'; setActiveNav('myfiles'); updateLocation(); renderEntries(); }
+  updateDriveConnectionUI(); toast('Google Drive disconnected');
+});
+$('#drive-nav').addEventListener('click', async () => {
+  if (!state.driveToken || state.driveTokenExpiry <= Date.now()) return connectGoogleDrive();
+  state.driveFolderStack = []; state.currentView = 'drive'; state.search = ''; $('#search-input').value = '';
+  try { await loadDriveFolder('root', 'My Drive', false); updateLocation(); renderEntries(); }
+  catch (error) { toast(error.message || 'Could not load Google Drive.'); }
+});
+$('#drive-load-more').addEventListener('click', async () => {
+  try { await loadDriveFolder(driveFolderId(), state.driveFolderStack.at(-1)?.name || 'My Drive', false, true); renderEntries(); }
+  catch (error) { toast(error.message || 'Could not load more Drive files.'); }
+});
+
+// Upload selected local files into the currently open Google Drive folder.
+const driveUploadInput = $('#drive-upload-input');
+$('#drive-upload-button').addEventListener('click', () => driveUploadInput.click());
+driveUploadInput.addEventListener('change', async () => {
+  const files = [...(driveUploadInput.files || [])];
+  driveUploadInput.value = '';
+  if (!files.length || !state.driveToken) return;
+  const folderId = driveFolderId();
+  $('#drive-upload-button').disabled = true;
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      toast(`Uploading ${i + 1} of ${files.length}: ${file.name}`);
+      const metadata = { name: file.name, parents: [folderId] };
+      const boundary = '-------chromeosfiles' + Math.random().toString(16).slice(2);
+      const body = new Blob([
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,
+        `--${boundary}\r\nContent-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`,
+        file, `\r\n--${boundary}--`
+      ]);
+      const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,modifiedTime,webViewLink,capabilities(canDownload)', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${state.driveToken}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
+        body
+      });
+      if (!response.ok) {
+        let message = `Upload failed (${response.status}).`;
+        try { message = (await response.json()).error?.message || message; } catch (_) {}
+        throw new Error(message);
+      }
+    }
+    await loadDriveFolder(folderId, state.driveFolderStack.at(-1)?.name || 'My Drive', false, false);
+    renderEntries();
+    toast(`${files.length} file${files.length === 1 ? '' : 's'} uploaded to Google Drive`);
+  } catch (error) { toast(error.message || 'Could not upload to Google Drive.'); }
+  finally { $('#drive-upload-button').disabled = false; }
+});
+
+$('#drive-setup-close').addEventListener('click', () => $('#drive-setup-dialog').close());
+$('#drive-setup-cancel').addEventListener('click', () => $('#drive-setup-dialog').close());
+$('#drive-setup-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const clientId = $('#drive-client-id').value.trim();
+  if (!clientId.endsWith('.apps.googleusercontent.com')) { toast('Enter a valid Google OAuth client ID.'); return; }
+  localStorage.setItem('chromeos-files-google-client-id', clientId);
+  $('#drive-setup-dialog').close();
+  await connectGoogleDrive();
+});
+
+updateDriveConnectionUI();

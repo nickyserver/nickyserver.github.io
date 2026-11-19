@@ -2,7 +2,7 @@
   "id": "./index.html",
   "name": "Files for ChromeOS",
   "short_name": "Files",
-  "description": "A local-first file browser and viewer for ChromeOS.",
+  "description": "A ChromeOS-style file manager with local files and Google Drive.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
