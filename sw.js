@@ -1,5 +1,5 @@
 // Bump CACHE_VERSION whenever you change any cached file so players get the update.
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const CACHE_NAME = "tag-escape-" + CACHE_VERSION;
 
 const ASSETS = [

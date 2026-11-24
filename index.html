@@ -122,6 +122,7 @@ button:hover{filter:brightness(1.15)}
  <div class="stat">🪙 COINS: <span id="coins">0</span></div>
  <div class="stat">⚡ SPEED: <span id="speed">1</span></div>
  <div class="stat">👾 TAGGERS: <span id="taggers">2</span></div>
+ <div class="stat">🏆 BEST: <span id="best">1</span></div>
 </div>
 
 <canvas id="game" width="900" height="600"></canvas>
@@ -132,6 +133,8 @@ button:hover{filter:brightness(1.15)}
  <button onclick="buySpeed()">⚡ Upgrade Speed (<span id="cost">10</span> coins)</button>
  <button onclick="restartGame()">↻ Restart</button>
  <button onclick="togglePause()">⏸ Pause</button>
+ <button id="muteBtn" onclick="toggleMute()">🔊 Sound on</button>
+ <button id="installBtn" style="display:none">⬇ Install</button>
 </div>
 
 <div id="mobile">
@@ -175,6 +178,47 @@ let player;
 let exit={x:850,y:550,r:25};
 let lastTime=0;
 let messageTimer=0;
+let best=1,muted=false,particles=[],audioCtx=null,deferredPrompt=null;
+try{best=+localStorage.getItem("tagBest")||1;muted=localStorage.getItem("tagMuted")==="1";}catch(e){}
+
+function saveBest(){
+ if(level>best){best=level;try{localStorage.setItem("tagBest",best);}catch(e){}}
+}
+function beep(freq,dur,type="square",vol=0.06,slide=0){
+ if(muted)return;
+ try{
+  audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==="suspended")audioCtx.resume();
+  const t=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=type;o.frequency.setValueAtTime(freq,t);
+  if(slide)o.frequency.linearRampToValueAtTime(freq+slide,t+dur);
+  g.gain.setValueAtTime(vol,t);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g);g.connect(audioCtx.destination);
+  o.start(t);o.stop(t+dur);
+ }catch(e){}
+}
+const sfx={
+ coin:()=>beep(880,.1,"square",.05,500),
+ hit:()=>{beep(180,.3,"sawtooth",.08,-120);if(navigator.vibrate)navigator.vibrate(120);},
+ level:()=>{beep(523,.12);setTimeout(()=>beep(659,.12),110);setTimeout(()=>beep(784,.2),220);},
+ buy:()=>beep(440,.2,"triangle",.07,440),
+ lose:()=>beep(200,.6,"sawtooth",.08,-150)
+};
+function burst(x,y,color){
+ for(let i=0;i<12;i++){
+  const a=Math.random()*Math.PI*2,sp=1+Math.random()*2.5;
+  particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:30,color});
+ }
+}
+function updateMuteBtn(){
+ document.getElementById("muteBtn").textContent=muted?"🔇 Sound off":"🔊 Sound on";
+}
+function toggleMute(){
+ muted=!muted;
+ try{localStorage.setItem("tagMuted",muted?"1":"0");}catch(e){}
+ updateMuteBtn();
+}
 
 const rand=(a,b)=>Math.random()*(b-a)+a;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -191,6 +235,7 @@ function updateHUD(){
  document.getElementById("speed").textContent=speedLevel;
  document.getElementById("taggers").textContent=taggers.length;
  document.getElementById("cost").textContent=upgradeCost;
+ document.getElementById("best").textContent=best;
 }
 
 function circleRect(cx,cy,r,rect){
@@ -404,10 +449,12 @@ function updateTagger(t,dt){
 function loseLife(){
  if(player.invincible>0||gameOver)return;
  lives--;
+ sfx.hit();burst(player.x,player.y,"#ff3030");
  updateHUD();
 
  if(lives<=0){
   gameOver=true;
+  sfx.lose();
   showOverlay("GAME OVER","The taggers caught you! Press restart to try again.");
   return;
  }
@@ -424,6 +471,7 @@ function collectCoins(){
   if(distance(player,c)<player.r+c.r){
    pickups.splice(i,1);
    coins++;
+   sfx.coin();burst(c.x,c.y,"#ffd700");
    updateHUD();
    setMessage("+1 COIN!");
   }
@@ -448,6 +496,8 @@ function checkExit(){
    return;
   }
   level++;
+  saveBest();
+  sfx.level();
   createLevel();
   setMessage("LEVEL "+level+"! More taggers are coming!");
  }
@@ -462,6 +512,12 @@ function update(dt){
   if(messageTimer<=0)
    document.getElementById("message").textContent=
    "Collect coins, avoid the taggers and reach the green exit!";
+ }
+
+ for(let i=particles.length-1;i>=0;i--){
+  const p=particles[i];
+  p.x+=p.vx*dt;p.y+=p.vy*dt;
+  if(--p.life<=0)particles.splice(i,1);
  }
 
  playerMove(dt);
@@ -569,6 +625,14 @@ function draw(){
   ctx.fillText("TAG",t.x,t.y+29);
  }
 
+ // Particles
+ for(const p of particles){
+  ctx.globalAlpha=Math.max(p.life/30,0);
+  ctx.fillStyle=p.color;
+  ctx.fillRect(p.x-2,p.y-2,4,4);
+ }
+ ctx.globalAlpha=1;
+
  // Player flashes briefly after being tagged.
  if(player.invincible<=0||Math.floor(player.invincible/8)%2===0){
   drawBall(player.x,player.y,player.r,player.color1,player.color2);
@@ -601,6 +665,7 @@ function buySpeed(){
  if(coins>=upgradeCost){
   coins-=upgradeCost;
   speedLevel++;
+  sfx.buy();
   upgradeCost+=10;
   updateHUD();
   setMessage("SPEED UPGRADED! ⚡");
@@ -671,6 +736,28 @@ document.querySelectorAll("#mobile button").forEach(button=>{
  button.addEventListener("pointercancel",release);
 });
 
+// Auto-pause when the app/tab is hidden
+document.addEventListener("visibilitychange",()=>{
+ if(document.hidden&&!paused&&!gameOver)togglePause();
+});
+
+// Install button (shown only when the browser offers installation)
+const installBtn=document.getElementById("installBtn");
+window.addEventListener("beforeinstallprompt",e=>{
+ e.preventDefault();
+ deferredPrompt=e;
+ installBtn.style.display="";
+});
+installBtn.addEventListener("click",async()=>{
+ if(!deferredPrompt)return;
+ deferredPrompt.prompt();
+ await deferredPrompt.userChoice;
+ deferredPrompt=null;
+ installBtn.style.display="none";
+});
+window.addEventListener("appinstalled",()=>{installBtn.style.display="none";});
+
+updateMuteBtn();
 createLevel();
 updateHUD();
 requestAnimationFrame(loop);
