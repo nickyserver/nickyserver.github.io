@@ -1,146 +1,685 @@
-<!doctype html>
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f6f8fc">
-  <meta name="description" content="A local-first Files app for ChromeOS.">
-  <meta name="color-scheme" content="light">
-  <title>Files</title>
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon-192.png" type="image/png">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TAG ESCAPE</title>
+<meta name="theme-color" content="#101827">
+<meta name="description" content="Collect coins, dodge the taggers and reach the exit across 100 levels.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tag Escape">
+<style>
+*{box-sizing:border-box}
+html,body{overscroll-behavior:none}
+body{
+ -webkit-user-select:none;user-select:none;
+ -webkit-tap-highlight-color:transparent;
+ margin:0;
+ background:#101827;
+ color:white;
+ font-family:Arial,sans-serif;
+ text-align:center;
+}
+h1{
+ margin:12px 0 5px;
+ color:#55eaff;
+ text-shadow:0 0 15px #00bfff;
+}
+#info{
+ display:flex;
+ justify-content:center;
+ flex-wrap:wrap;
+ gap:12px;
+ margin:10px;
+ font-weight:bold;
+}
+.stat{
+ background:#24334a;
+ padding:9px 14px;
+ border-radius:10px;
+}
+canvas{
+ display:block;
+ margin:10px auto;
+ max-width:96vw;
+ border:4px solid #536b85;
+ border-radius:12px;
+ background:#182b35;
+}
+button{
+ border:0;
+ border-radius:10px;
+ padding:11px 16px;
+ margin:4px;
+ font-size:15px;
+ font-weight:bold;
+ cursor:pointer;
+ background:#27d6ef;
+ color:#10202c;
+}
+button:hover{filter:brightness(1.15)}
+#controls{
+ display:flex;
+ justify-content:center;
+ align-items:center;
+ gap:8px;
+ flex-wrap:wrap;
+ margin:8px;
+}
+#mobile{
+ display:none;
+ margin:12px auto;
+ width:180px;
+}
+#mobile button{
+ width:52px;
+ height:48px;
+ font-size:20px;
+ margin:3px;
+ touch-action:none;
+}
+#message{
+ min-height:24px;
+ color:#ffe66d;
+ font-weight:bold;
+}
+#overlay{
+ position:fixed;
+ inset:0;
+ background:#000b;
+ display:none;
+ align-items:center;
+ justify-content:center;
+ z-index:5;
+}
+#panel{
+ background:#20334b;
+ padding:30px;
+ border:3px solid #55eaff;
+ border-radius:18px;
+ width:min(90%,380px);
+}
+#panel h2{color:#55eaff}
+@media(max-width:700px){
+ #mobile{display:block}
+ canvas{width:96vw;height:auto}
+}
+</style>
 </head>
 <body>
-  <div id="install-gate" class="install-gate" aria-live="polite">
-    <div class="install-card">
-      <div class="brand-mark large" aria-hidden="true">
-        <svg viewBox="0 0 48 48"><path d="M5.5 13.5a4 4 0 0 1 4-4h10l4.2 4.5h14.8a4 4 0 0 1 4 4v19a4 4 0 0 1-4 4h-29a4 4 0 0 1-4-4z" fill="#4285f4"/><path d="M5.5 18h37v19a4 4 0 0 1-4 4h-29a4 4 0 0 1-4-4z" fill="#1a73e8"/><path d="M5.5 18h37" stroke="#8ab4f8" stroke-width="2"/></svg>
-      </div>
-      <p class="eyebrow">CHROMEOS FILES</p>
-      <h1>Install Files to continue</h1>
-      <p class="install-copy">This app is designed to run in its own window. Install it from Chrome, then open the installed Files app from your launcher.</p>
-      <button id="install-button" class="primary-button install-button" type="button">Install Files</button>
-      <div id="install-help" class="install-help" hidden>
-        <strong>Install from Chrome</strong>
-        <p>Open the Chrome menu and choose <b>Install Files</b> or <b>Cast, save, and share → Install page as app</b>. Then launch Files from your Chromebook launcher.</p>
-      </div>
-      <p id="install-status" class="install-status">Install is required to use this app.</p>
-      <p class="install-footnote">Installation is controlled by Chrome. This page cannot silently install itself.</p>
-    </div>
-  </div>
 
-  <div id="app" class="app-shell" hidden>
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-brand">
-        <div class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 48 48"><path d="M5.5 13.5a4 4 0 0 1 4-4h10l4.2 4.5h14.8a4 4 0 0 1 4 4v19a4 4 0 0 1-4 4h-29a4 4 0 0 1-4-4z" fill="#4285f4"/><path d="M5.5 18h37v19a4 4 0 0 1-4 4h-29a4 4 0 0 1-4-4z" fill="#1a73e8"/><path d="M5.5 18h37" stroke="#8ab4f8" stroke-width="2"/></svg>
-        </div>
-        <span>Files</span>
-      </div>
+<h1>⚡ TAG ESCAPE ⚡</h1>
 
-      <button class="sidebar-action" id="open-folder-sidebar" type="button">
-        <span class="side-icon" data-icon="folder-plus"></span><span>Open folder</span>
-      </button>
-      <button class="sidebar-action" id="open-files-sidebar" type="button">
-        <span class="side-icon" data-icon="file-plus"></span><span>Open files</span>
-      </button>
+<div id="info">
+ <div class="stat">LEVEL: <span id="level">1</span>/100</div>
+ <div class="stat">❤️ LIVES: <span id="lives">3</span></div>
+ <div class="stat">🪙 COINS: <span id="coins">0</span></div>
+ <div class="stat">⚡ SPEED: <span id="speed">1</span></div>
+ <div class="stat">👾 TAGGERS: <span id="taggers">2</span></div>
+</div>
 
-      <div class="nav-label">MY FILES</div>
-      <nav class="nav-list" aria-label="File locations">
-        <button class="nav-item active" data-view="myfiles" type="button"><span data-icon="folder"></span><span>My files</span></button>
-        <button class="nav-item" data-view="recent" type="button"><span data-icon="clock"></span><span>Recent</span></button>
-        <button class="nav-item" data-view="starred" type="button"><span data-icon="star"></span><span>Starred</span></button>
-      </nav>
+<canvas id="game" width="900" height="600"></canvas>
 
-      <div class="nav-label drive-nav-label">GOOGLE DRIVE</div>
-      <nav class="nav-list" aria-label="Google Drive">
-        <button class="nav-item drive-nav-item" id="drive-nav" data-view="drive" type="button"><span data-icon="cloud"></span><span>My Drive</span><span class="nav-status-dot" id="drive-nav-dot"></span></button>
-      </nav>
+<div id="message">Collect coins, avoid the taggers and reach the green exit!</div>
 
-      <div class="sidebar-bottom">
-        <div class="drive-connect-card" id="drive-connect-card">
-          <div class="drive-connect-heading"><span data-icon="cloud"></span><span>Google Drive</span></div>
-          <p id="drive-connect-status">Not connected</p>
-          <button id="drive-connect-button" class="drive-connect-button" type="button">Connect Google Drive</button>
-          <button id="drive-disconnect-button" class="drive-disconnect-button" type="button" hidden>Disconnect</button>
-        </div>
-        <div class="storage-card">
-          <div class="storage-heading"><span data-icon="hard-drive"></span><span>On this device</span></div>
-          <p>Local files stay on this device.</p>
-        </div>
-        <div class="sidebar-version">Files for ChromeOS <span>1.1</span></div>
-      </div>
-    </aside>
+<div id="controls">
+ <button onclick="buySpeed()">⚡ Upgrade Speed (<span id="cost">10</span> coins)</button>
+ <button onclick="restartGame()">↻ Restart</button>
+ <button onclick="togglePause()">⏸ Pause</button>
+</div>
 
-    <main class="main-area">
-      <header class="topbar">
-        <button id="mobile-menu" class="icon-button mobile-menu" type="button" aria-label="Open navigation" title="Open navigation"><span data-icon="menu"></span></button>
-        <div class="search-wrap"><span data-icon="search"></span><input id="search-input" type="search" placeholder="Search in this location" autocomplete="off" aria-label="Search files"></div>
-        <div class="top-actions">
-          <button id="sort-button" class="icon-button" type="button" title="Sort by name" aria-label="Sort files"><span data-icon="arrow-down-a-z"></span></button>
-          <button id="view-toggle" class="icon-button" type="button" title="Switch view" aria-label="Switch view"><span data-icon="layout-grid"></span></button>
-          <button id="drive-upload-button" class="secondary-button compact drive-upload-button" type="button" hidden><span data-icon="upload"></span> Upload to Drive</button><button id="top-open-files" class="primary-button compact" type="button"><span data-icon="plus"></span> Open files</button>
-        </div>
-      </header>
+<div id="mobile">
+ <div><button data-key="ArrowUp">▲</button></div>
+ <div>
+  <button data-key="ArrowLeft">◀</button>
+  <button data-key="ArrowDown">▼</button>
+  <button data-key="ArrowRight">▶</button>
+ </div>
+</div>
 
-      <section class="content-area">
-        <div class="location-row">
-          <div class="location-title"><h1 id="location-heading">My files</h1><div id="breadcrumbs" class="breadcrumbs" aria-label="Current folder"></div></div>
-          <div class="location-actions"><span id="item-count" class="item-count">No location selected</span><button id="top-open-folder" class="secondary-button" type="button"><span data-icon="folder-plus"></span> Open folder</button></div>
-        </div>
+<div id="overlay">
+ <div id="panel">
+  <h2 id="overlayTitle">PAUSED</h2>
+  <p id="overlayText">Press ESC or the button to continue.</p>
+  <button onclick="togglePause()">Continue</button>
+  <button onclick="restartGame()">Restart</button>
+ </div>
+</div>
 
-        <div id="empty-state" class="empty-state">
-          <div class="empty-illustration" aria-hidden="true">
-            <svg viewBox="0 0 180 142"><rect x="28" y="18" width="124" height="104" rx="12" fill="#e8f0fe"/><path d="M43 44a7 7 0 0 1 7-7h27l10 10h43a7 7 0 0 1 7 7v47a7 7 0 0 1-7 7H50a7 7 0 0 1-7-7z" fill="#8ab4f8"/><path d="M43 57h94v44a7 7 0 0 1-7 7H50a7 7 0 0 1-7-7z" fill="#4285f4"/><path d="M67 76h46M67 88h30" stroke="#d2e3fc" stroke-width="5" stroke-linecap="round"/></svg>
-          </div>
-          <h2>Your files, all in one place</h2>
-          <p>Open a folder to browse its contents, or choose individual files to view them here.</p>
-          <div class="empty-actions"><button id="empty-open-folder" class="primary-button" type="button"><span data-icon="folder-plus"></span> Open folder</button><button id="empty-open-files" class="secondary-button" type="button"><span data-icon="file-plus"></span> Choose files</button></div>
-          <p class="privacy-note"><span data-icon="shield-check"></span> Your files are read directly from your device.</p>
-        </div>
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
 
-        <div id="drop-hint" class="drop-hint" hidden><span data-icon="download"></span> Drop files here to add them to this view</div>
-        <div id="file-area" class="file-area" hidden>
-          <div id="file-grid" class="file-grid" role="list"></div>
-          <div id="file-table-wrap" class="file-table-wrap" hidden>
-            <table class="file-table">
-              <thead><tr><th>Name</th><th>Type</th><th>Size</th><th>Modified</th><th aria-label="Actions"></th></tr></thead>
-              <tbody id="file-table-body"></tbody>
-            </table>
-          </div>
-          <div class="drive-load-row" id="drive-load-row" hidden><button class="secondary-button" id="drive-load-more" type="button">Load more</button></div>
-          <div id="no-results" class="no-results" hidden><span data-icon="search-x"></span><h2>No matching files</h2><p>Try a different search term.</p></div>
-        </div>
-      </section>
-    </main>
-  </div>
+const W=canvas.width;
+const H=canvas.height;
 
-  <dialog id="drive-setup-dialog" class="drive-setup-dialog">
-    <form id="drive-setup-form" method="dialog">
-      <div class="drive-setup-top"><div class="drive-setup-icon" data-icon="cloud"></div><button class="icon-button" id="drive-setup-close" type="button" aria-label="Close"><span data-icon="x"></span></button></div>
-      <h2>Connect Google Drive</h2>
-      <p>Enter the OAuth client ID from your Google Cloud project. This app uses a read-only permission to list and preview your Drive files.</p>
-      <label for="drive-client-id">OAuth 2.0 Client ID</label>
-      <input id="drive-client-id" type="text" placeholder="1234567890-abcdefg.apps.googleusercontent.com" autocomplete="off" spellcheck="false">
-      <div class="drive-setup-help">You need to enable the Google Drive API and add this site's origin to your OAuth client's authorised JavaScript origins.</div>
-      <div class="drive-setup-links"><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud credentials</a><a href="https://developers.google.com/workspace/drive/api/quickstart/js" target="_blank" rel="noopener">Setup guide</a></div>
-      <div class="drive-setup-actions"><button class="secondary-button" id="drive-setup-cancel" type="button">Cancel</button><button class="primary-button" id="drive-setup-save" type="submit">Save and connect</button></div>
-    </form>
-  </dialog>
+const keys={};
+let level=1;
+let lives=3;
+let coins=0;
+let speedLevel=1;
+let upgradeCost=10;
+let paused=false;
+let gameOver=false;
+let won=false;
+let obstacles=[];
+let pickups=[];
+let taggers=[];
+let player;
+let exit={x:850,y:550,r:25};
+let lastTime=0;
+let messageTimer=0;
 
-  <dialog id="viewer-dialog" class="viewer-dialog">
-    <div class="viewer-header"><div class="viewer-title-wrap"><span id="viewer-file-icon" class="viewer-file-icon" data-icon="file"></span><div><h2 id="viewer-title">File preview</h2><p id="viewer-subtitle"></p></div></div><div class="viewer-actions"><button id="viewer-download" class="icon-button" type="button" title="Download a copy" aria-label="Download a copy"><span data-icon="download"></span></button><button id="viewer-close" class="icon-button" type="button" title="Close preview" aria-label="Close preview"><span data-icon="x"></span></button></div></div>
-    <div id="viewer-content" class="viewer-content"></div>
-  </dialog>
-  <input id="fallback-file-input" type="file" multiple hidden>
-  <input id="drive-upload-input" type="file" multiple hidden>
-  <input id="fallback-folder-input" type="file" webkitdirectory multiple hidden>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js" defer></script>
+const rand=(a,b)=>Math.random()*(b-a)+a;
+const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+
+function setMessage(text){
+ document.getElementById("message").textContent=text;
+ messageTimer=180;
+}
+
+function updateHUD(){
+ document.getElementById("level").textContent=level;
+ document.getElementById("lives").textContent=lives;
+ document.getElementById("coins").textContent=coins;
+ document.getElementById("speed").textContent=speedLevel;
+ document.getElementById("taggers").textContent=taggers.length;
+ document.getElementById("cost").textContent=upgradeCost;
+}
+
+function circleRect(cx,cy,r,rect){
+ const nx=Math.max(rect.x,Math.min(cx,rect.x+rect.w));
+ const ny=Math.max(rect.y,Math.min(cy,rect.y+rect.h));
+ return Math.hypot(cx-nx,cy-ny)<r;
+}
+
+function blocked(x,y,r){
+ if(x<r+8||x>W-r-8||y<r+8||y>H-r-8)return true;
+ for(const o of obstacles){
+  if(circleRect(x,y,r,o))return true;
+ }
+ return false;
+}
+
+function safePosition(x,y,r){
+ return !blocked(x,y,r);
+}
+
+function randomOpenPosition(r=15){
+ for(let i=0;i<500;i++){
+  const x=rand(65,W-65);
+  const y=rand(65,H-65);
+  if(safePosition(x,y,r)&&
+     Math.hypot(x-100,y-100)>130&&
+     Math.hypot(x-exit.x,y-exit.y)>100){
+   return {x,y};
+  }
+ }
+ return {x:W/2,y:H/2};
+}
+
+function createLevel(){
+ obstacles=[];
+ pickups=[];
+ taggers=[];
+
+ // Create obstacles, keeping the start and exit areas clear.
+ const obstacleCount=Math.min(9+level*2,55);
+
+ for(let i=0;i<obstacleCount;i++){
+  let placed=false;
+  for(let tries=0;tries<100&&!placed;tries++){
+   const o={
+    x:rand(100,W-150),
+    y:rand(85,H-120),
+    w:rand(45,115),
+    h:rand(35,90)
+   };
+   const nearStart=Math.hypot(o.x+o.w/2-100,o.y+o.h/2-100)<125;
+   const nearExit=Math.hypot(o.x+o.w/2-exit.x,o.y+o.h/2-exit.y)<100;
+   if(!nearStart&&!nearExit&&
+      !obstacles.some(a=>!(o.x+o.w<a.x||o.x>a.x+a.w||
+      o.y+o.h<a.y||o.y>a.y+a.h))){
+    obstacles.push(o);
+    placed=true;
+   }
+  }
+ }
+
+ player={
+  x:100,y:100,r:17,
+  vx:0,vy:0,
+  color1:"#ff3030",
+  color2:"#258bff",
+  invincible:100
+ };
+
+ exit={x:850,y:550,r:25};
+
+ // Coins
+ for(let i=0;i<Math.min(8+Math.floor(level/2),20);i++){
+  const p=randomOpenPosition(12);
+  pickups.push({...p,r:10});
+ }
+
+ // Two taggers at first; one extra every ten levels.
+ const count=2+Math.floor((level-1)/10);
+ for(let i=0;i<count;i++){
+  const p=randomOpenPosition(20);
+  taggers.push({
+   x:p.x,y:p.y,r:19,
+   vx:0,vy:0,
+   speed:1.45+level*0.055+i*0.06,
+   color:i%2===0?"#ffe600":"#38ff64",
+   stuck:0,
+   wander:rand(0,Math.PI*2)
+  });
+ }
+ updateHUD();
+}
+
+function moveCircle(entity,dx,dy){
+ const nx=entity.x+dx;
+ if(!blocked(nx,entity.y,entity.r))entity.x=nx;
+ const ny=entity.y+dy;
+ if(!blocked(entity.x,ny,entity.r))entity.y=ny;
+}
+
+function playerMove(dt){
+ let dx=0,dy=0;
+ if(keys.ArrowLeft||keys.a||keys.A)dx--;
+ if(keys.ArrowRight||keys.d||keys.D)dx++;
+ if(keys.ArrowUp||keys.w||keys.W)dy--;
+ if(keys.ArrowDown||keys.s||keys.S)dy++;
+
+ const len=Math.hypot(dx,dy);
+ if(len>0){
+  dx/=len;dy/=len;
+ }
+ const speed=2.5+(speedLevel-1)*0.45;
+ moveCircle(player,dx*speed*dt,dy*speed*dt);
+}
+
+function canMove(x,y,r){
+ return !blocked(x,y,r);
+}
+
+// AI checks multiple directions and chooses a clear route toward the player.
+function updateTagger(t,dt){
+ const dx=player.x-t.x;
+ const dy=player.y-t.y;
+ const targetAngle=Math.atan2(dy,dx);
+
+ const angles=[
+  targetAngle,
+  targetAngle+0.45,
+  targetAngle-0.45,
+  targetAngle+0.9,
+  targetAngle-0.9,
+  targetAngle+1.5,
+  targetAngle-1.5,
+  targetAngle+Math.PI
+ ];
+
+ let bestAngle=null;
+ let bestScore=-Infinity;
+ const step=t.speed*dt;
+
+ for(const a of angles){
+  const tx=t.x+Math.cos(a)*step*4;
+  const ty=t.y+Math.sin(a)*step*4;
+  if(!canMove(tx,ty,t.r))continue;
+
+  // Prefer directions that get closer to the player.
+  let score=-Math.hypot(player.x-tx,player.y-ty);
+
+  // Avoid getting too close to walls and obstacles.
+  for(const o of obstacles){
+   const cx=Math.max(o.x,Math.min(tx,o.x+o.w));
+   const cy=Math.max(o.y,Math.min(ty,o.y+o.h));
+   const d=Math.hypot(tx-cx,ty-cy);
+   if(d<45)score-= (45-d)*1.6;
+  }
+
+  // Small preference for continuing in the current direction.
+  if(Math.hypot(t.vx,t.vy)>0){
+   const oldAngle=Math.atan2(t.vy,t.vx);
+   score+=Math.cos(a-oldAngle)*5;
+  }
+
+  if(score>bestScore){
+   bestScore=score;
+   bestAngle=a;
+  }
+ }
+
+ if(bestAngle===null){
+  t.stuck++;
+  t.wander+=rand(-1.5,1.5);
+  const escapeAngles=[
+   t.wander,t.wander+1.57,t.wander-1.57,
+   t.wander+Math.PI
+  ];
+  for(const a of escapeAngles){
+   const tx=t.x+Math.cos(a)*step*3;
+   const ty=t.y+Math.sin(a)*step*3;
+   if(canMove(tx,ty,t.r)){
+    bestAngle=a;
+    break;
+   }
+  }
+ }else{
+  t.stuck=0;
+ }
+
+ if(bestAngle!==null){
+  const mx=Math.cos(bestAngle)*step;
+  const my=Math.sin(bestAngle)*step;
+  moveCircle(t,mx,my);
+  t.vx=mx;
+  t.vy=my;
+ }
+
+ // Extra escape movement if the AI remains stuck.
+ if(t.stuck>35){
+  for(let i=0;i<20;i++){
+   const a=rand(0,Math.PI*2);
+   const nx=t.x+Math.cos(a)*30;
+   const ny=t.y+Math.sin(a)*30;
+   if(canMove(nx,ny,t.r)){
+    t.x=nx;t.y=ny;
+    break;
+   }
+  }
+  t.stuck=0;
+ }
+}
+
+function loseLife(){
+ if(player.invincible>0||gameOver)return;
+ lives--;
+ updateHUD();
+
+ if(lives<=0){
+  gameOver=true;
+  showOverlay("GAME OVER","The taggers caught you! Press restart to try again.");
+  return;
+ }
+
+ player.x=100;
+ player.y=100;
+ player.invincible=150;
+ setMessage("Oof! You got tagged. Watch out!");
+}
+
+function collectCoins(){
+ for(let i=pickups.length-1;i>=0;i--){
+  const c=pickups[i];
+  if(distance(player,c)<player.r+c.r){
+   pickups.splice(i,1);
+   coins++;
+   updateHUD();
+   setMessage("+1 COIN!");
+  }
+ }
+}
+
+function checkTaggers(){
+ for(const t of taggers){
+  if(distance(player,t)<player.r+t.r){
+   loseLife();
+   break;
+  }
+ }
+}
+
+function checkExit(){
+ if(distance(player,exit)<player.r+exit.r){
+  if(level>=100){
+   won=true;
+   gameOver=true;
+   showOverlay("YOU WIN! 🏆","You escaped all 100 levels! Amazing!");
+   return;
+  }
+  level++;
+  createLevel();
+  setMessage("LEVEL "+level+"! More taggers are coming!");
+ }
+}
+
+function update(dt){
+ if(paused||gameOver)return;
+
+ if(player.invincible>0)player.invincible-=dt;
+ if(messageTimer>0){
+  messageTimer-=dt;
+  if(messageTimer<=0)
+   document.getElementById("message").textContent=
+   "Collect coins, avoid the taggers and reach the green exit!";
+ }
+
+ playerMove(dt);
+
+ for(const t of taggers)updateTagger(t,dt);
+
+ collectCoins();
+ checkTaggers();
+ checkExit();
+}
+
+function drawBall(x,y,r,c1,c2){
+ const g=ctx.createRadialGradient(x-r*.35,y-r*.4,2,x,y,r);
+ g.addColorStop(0,"white");
+ g.addColorStop(.25,c1);
+ g.addColorStop(1,c2);
+ ctx.fillStyle=g;
+ ctx.beginPath();
+ ctx.arc(x,y,r,0,Math.PI*2);
+ ctx.fill();
+ ctx.strokeStyle="#101820";
+ ctx.lineWidth=2;
+ ctx.stroke();
+}
+
+function draw(){
+ ctx.clearRect(0,0,W,H);
+
+ // Background
+ ctx.fillStyle="#183b35";
+ ctx.fillRect(0,0,W,H);
+
+ // Floor grid
+ ctx.strokeStyle="rgba(255,255,255,.045)";
+ ctx.lineWidth=1;
+ for(let x=0;x<W;x+=40){
+  ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+ }
+ for(let y=0;y<H;y+=40){
+  ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+ }
+
+ // Border
+ ctx.strokeStyle="#b4d7c2";
+ ctx.lineWidth=8;
+ ctx.strokeRect(4,4,W-8,H-8);
+
+ // Obstacles
+ for(const o of obstacles){
+  ctx.fillStyle="#637386";
+  ctx.fillRect(o.x,o.y,o.w,o.h);
+  ctx.fillStyle="#8294a7";
+  ctx.fillRect(o.x+4,o.y+4,o.w-8,7);
+  ctx.strokeStyle="#263648";
+  ctx.lineWidth=3;
+  ctx.strokeRect(o.x,o.y,o.w,o.h);
+ }
+
+ // Exit
+ ctx.save();
+ ctx.shadowColor="#00ff66";
+ ctx.shadowBlur=22;
+ ctx.fillStyle="#00c853";
+ ctx.beginPath();
+ ctx.arc(exit.x,exit.y,exit.r,0,Math.PI*2);
+ ctx.fill();
+ ctx.restore();
+ ctx.strokeStyle="white";
+ ctx.lineWidth=3;
+ ctx.stroke();
+ ctx.fillStyle="white";
+ ctx.font="bold 13px Arial";
+ ctx.textAlign="center";
+ ctx.fillText("EXIT",exit.x,exit.y+5);
+
+ // Coins
+ for(const c of pickups){
+  ctx.save();
+  ctx.shadowColor="#ffdf00";
+  ctx.shadowBlur=12;
+  ctx.fillStyle="#ffd700";
+  ctx.beginPath();
+  ctx.arc(c.x,c.y,c.r,0,Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle="#fff4a0";
+  ctx.lineWidth=2;
+  ctx.stroke();
+  ctx.fillStyle="#855400";
+  ctx.font="bold 12px Arial";
+  ctx.fillText("$",c.x,c.y+4);
+ }
+
+ // Taggers
+ for(let i=0;i<taggers.length;i++){
+  const t=taggers[i];
+  drawBall(t.x,t.y,t.r,t.color,"#b15c00");
+  ctx.fillStyle="#111";
+  ctx.beginPath();
+  ctx.arc(t.x-6,t.y-3,3,0,Math.PI*2);
+  ctx.arc(t.x+6,t.y-3,3,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle="white";
+  ctx.font="bold 10px Arial";
+  ctx.fillText("TAG",t.x,t.y+29);
+ }
+
+ // Player flashes briefly after being tagged.
+ if(player.invincible<=0||Math.floor(player.invincible/8)%2===0){
+  drawBall(player.x,player.y,player.r,player.color1,player.color2);
+  ctx.fillStyle="white";
+  ctx.beginPath();
+  ctx.arc(player.x-5,player.y-3,3,0,Math.PI*2);
+  ctx.arc(player.x+5,player.y-3,3,0,Math.PI*2);
+  ctx.fill();
+ }
+
+ if(paused){
+  ctx.fillStyle="#0009";
+  ctx.fillRect(0,0,W,H);
+  ctx.fillStyle="white";
+  ctx.font="bold 55px Arial";
+  ctx.textAlign="center";
+  ctx.fillText("PAUSED",W/2,H/2);
+ }
+}
+
+function loop(time){
+ const dt=Math.min((time-lastTime)/16.67||1,2);
+ lastTime=time;
+ update(dt);
+ draw();
+ requestAnimationFrame(loop);
+}
+
+function buySpeed(){
+ if(coins>=upgradeCost){
+  coins-=upgradeCost;
+  speedLevel++;
+  upgradeCost+=10;
+  updateHUD();
+  setMessage("SPEED UPGRADED! ⚡");
+ }else{
+  setMessage("Not enough coins! Collect more.");
+ }
+}
+
+function showOverlay(title,text){
+ document.getElementById("overlayTitle").textContent=title;
+ document.getElementById("overlayText").textContent=text;
+ document.getElementById("overlay").style.display="flex";
+}
+
+function hideOverlay(){
+ document.getElementById("overlay").style.display="none";
+}
+
+function togglePause(){
+ if(gameOver)return;
+ paused=!paused;
+ if(paused)showOverlay("PAUSED","Press ESC or Continue to resume.");
+ else hideOverlay();
+}
+
+function restartGame(){
+ level=1;
+ lives=3;
+ coins=0;
+ speedLevel=1;
+ upgradeCost=10;
+ paused=false;
+ gameOver=false;
+ won=false;
+ hideOverlay();
+ createLevel();
+ setMessage("New game! Escape the taggers!");
+ updateHUD();
+}
+
+document.addEventListener("keydown",e=>{
+ if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)){
+  e.preventDefault();
+ }
+ if(e.key==="Escape"){
+  togglePause();
+  return;
+ }
+ keys[e.key]=true;
+});
+
+document.addEventListener("keyup",e=>{
+ keys[e.key]=false;
+});
+
+// Mobile controls
+document.querySelectorAll("#mobile button").forEach(button=>{
+ const key=button.dataset.key;
+ button.addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  keys[key]=true;
+ });
+ const release=()=>{
+  keys[key]=false;
+ };
+ button.addEventListener("pointerup",release);
+ button.addEventListener("pointerleave",release);
+ button.addEventListener("pointercancel",release);
+});
+
+createLevel();
+updateHUD();
+requestAnimationFrame(loop);
+// Register the service worker (needs https or localhost)
+if("serviceWorker" in navigator){
+ window.addEventListener("load",()=>{
+  navigator.serviceWorker.register("sw.js").catch(err=>console.warn("SW registration failed:",err));
+ });
+}
+</script>
 </body>
 </html>
